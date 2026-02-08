@@ -63,3 +63,8 @@ Los temas visuales están definidos en `app/src/core/visuals/themes.ts`. Puedes 
 ## Licencia
 
 Este proyecto es de código abierto. Siéntete libre de modificarlo y experimentar.
+
+## Referencias
+
+- **Teoría del Tone Clock**: [Wikipedia: Tone clock](https://en.wikipedia.org/wiki/Tone_clock)
+- **Peter Schat**: Compositor holandés que desarrolló la técnica.
