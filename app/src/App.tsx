@@ -10,6 +10,7 @@ import { useStore } from './hooks/useStore';
 import { audioEngine } from './core/audio/AudioEngine';
 import { timeDilator } from './core/time/TimeDilator';
 import { mapTimeToToneClock, pitchClassToNote, TONE_CLOCK_HOURS } from './core/theory/ToneClock';
+import { arpeggiator } from './core/audio/Arpeggiator';
 
 function App() {
   const {
@@ -28,9 +29,9 @@ function App() {
     hourPreset,
     minutePreset,
     secondPreset,
+    background,
+    arpeggiator: arpSettings,
   } = useStore();
-
-  const { background } = useStore();
 
   // Calculate BPM from speed (base 60 BPM at 1x speed)
   const bpm = Math.round(60 * speed);
@@ -107,6 +108,64 @@ function App() {
     audioEngine.setMasterVolume(masterVolume);
   }, [masterVolume]);
 
+  // Setup arpeggiator callback to play notes through audio engine
+  useEffect(() => {
+    arpeggiator.setCallback((note) => {
+      if (audioStarted && isPlaying) {
+        // Use dedicated arpeggiator synth with portamento
+        audioEngine.playArpNote(note, '16n');
+      }
+    });
+
+    return () => {
+      arpeggiator.dispose();
+    };
+  }, [audioStarted, isPlaying]);
+
+  // Sync arpeggiator settings from store
+  useEffect(() => {
+    arpeggiator.updateSettings(arpSettings);
+    // Update portamento on audio engine (convert ms to seconds)
+    audioEngine.setArpPortamento(arpSettings.glissando / 1000);
+  }, [arpSettings]);
+
+  // Update arpeggiator notes when time changes
+  useEffect(() => {
+    if (!isPlaying || !audioStarted) return;
+
+    const updateArpNotes = () => {
+      const time = timeDilator.getTime();
+      const toneState = mapTimeToToneClock(time.hours, time.minutes, time.seconds);
+      const notes = toneState.currentTrichord.map((pc) => pitchClassToNote(pc, 4));
+      arpeggiator.setNotes(notes);
+    };
+
+    // Initial update
+    updateArpNotes();
+
+    // Update on minute changes (when trichord might change)
+    const handleTimeEvent = (event: { type: string }) => {
+      if (event.type === 'minute' || event.type === 'hour') {
+        updateArpNotes();
+      }
+    };
+
+    timeDilator.subscribe('arpeggiator-notes', handleTimeEvent);
+
+    return () => {
+      timeDilator.unsubscribe('arpeggiator-notes');
+    };
+  }, [isPlaying, audioStarted]);
+
+  // Sync arpeggiator volume
+  const { mixer } = useStore();
+  useEffect(() => {
+    if (mixer.arp) {
+      const volume = mixer.arp.muted ? -Infinity : mixer.arp.volume;
+      audioEngine.setArpVolume(volume);
+    }
+  }, [mixer.arp]);
+
   // Handle play button
   const handlePlay = async () => {
     if (!audioStarted) {
@@ -138,10 +197,11 @@ function App() {
 
   return (
     <div
-      className="app-container"
+      className={`app-container ${background.animated ? 'animated-bg' : ''}`}
       style={{
         background: background.color || theme.colors.background,
         fontFamily: theme.fontFamily,
+        animation: background.animated ? 'bgPulse 3s ease-in-out infinite' : 'none',
       }}
     >
       {/* Toolbar */}
@@ -159,7 +219,7 @@ function App() {
           <input
             type="range"
             min="0.1"
-            max="5"
+            max="10"
             step="0.1"
             value={speed}
             onChange={(e) => setSpeed(parseFloat(e.target.value))}

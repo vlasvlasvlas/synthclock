@@ -24,6 +24,11 @@ class AudioEngine {
     private masterVolume: Tone.Volume;
     private debug = true; // Enable debug logging
 
+    // Dedicated MonoSynth for arpeggiator with portamento
+    private arpSynth: Tone.MonoSynth | null = null;
+    private arpVolume: Tone.Volume | null = null;
+    private arpPortamento = 0;
+
     constructor() {
         this.masterVolume = new Tone.Volume(-6).toDestination();
         this.log('AudioEngine initialized');
@@ -257,6 +262,50 @@ class AudioEngine {
             this.log(`Playing chord on ${channelId}:`, notes);
         } catch (error) {
             this.logError(`Failed to play chord on ${channelId}`, error);
+        }
+    }
+
+    // Set arpeggiator portamento time (glissando)
+    setArpPortamento(timeInSeconds: number): void {
+        this.arpPortamento = timeInSeconds;
+        if (this.arpSynth) {
+            this.arpSynth.portamento = timeInSeconds;
+            this.log(`Arp portamento set to ${timeInSeconds}s`);
+        }
+    }
+
+    // Set arpeggiator volume
+    setArpVolume(volumeDb: number): void {
+        if (this.arpVolume) {
+            this.arpVolume.volume.value = volumeDb <= -60 ? -Infinity : Math.max(-60, Math.min(6, volumeDb));
+            this.log(`Arp volume set to ${volumeDb}dB`);
+        }
+    }
+
+    // Play a note on the dedicated arpeggiator synth with glissando
+    playArpNote(note: string, duration: string = '16n'): void {
+        if (!this.isStarted) return;
+
+        // Create arpSynth on first use
+        if (!this.arpSynth) {
+            // Create volume node connected to master
+            this.arpVolume = new Tone.Volume(-10).connect(this.masterVolume);
+
+            // Create synth connected to volume node
+            this.arpSynth = new Tone.MonoSynth({
+                oscillator: { type: 'sawtooth' },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 },
+                portamento: this.arpPortamento,
+            }).connect(this.arpVolume);
+
+            this.log('Arp MonoSynth created');
+        }
+
+        try {
+            // MonoSynth handles portamento automatically between notes
+            this.arpSynth.triggerAttackRelease(note, duration);
+        } catch (error) {
+            this.logError(`Failed to play arp note ${note}`, error);
         }
     }
 

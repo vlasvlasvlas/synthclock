@@ -15,6 +15,8 @@ export const SoundEditor = () => {
         secondPreset,
         setPreset,
         updatePresetParameter,
+        arpeggiator,
+        setArpeggiator,
     } = useStore();
 
     const currentPreset = activeLayer === 'hour'
@@ -312,6 +314,72 @@ export const SoundEditor = () => {
                                 })}
                             />
                             <span className="mac-slider-value">{currentPreset.effects.noiseGate || -100}dB</span>
+                        </div>
+                    </div>
+
+                    {/* Arpeggiator Panel */}
+                    <div className="mac-panel">
+                        <div className="mac-panel-title">Arpeggiator</div>
+
+                        {/* Enable Toggle */}
+                        <div
+                            className={`mac-checkbox ${arpeggiator.enabled ? 'checked' : ''}`}
+                            onClick={() => setArpeggiator({ enabled: !arpeggiator.enabled })}
+                            style={{ marginBottom: 8, cursor: 'pointer' }}
+                        >
+                            <span className="mac-checkbox-box">{arpeggiator.enabled ? '☑' : '☐'}</span>
+                            <span>Enable Arpeggiator</span>
+                        </div>
+
+                        {/* Pattern */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                            {(['up', 'down', 'upDown', 'downUp', 'random'] as const).map(p => (
+                                <div
+                                    key={p}
+                                    className={`mac-radio ${arpeggiator.pattern === p ? 'selected' : ''}`}
+                                    onClick={() => setArpeggiator({ pattern: p })}
+                                    style={{ fontSize: 10, opacity: arpeggiator.enabled ? 1 : 0.5 }}
+                                >
+                                    <span className="mac-radio-circle" />
+                                    <span>{p}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Rate */}
+                        <div className="mac-slider">
+                            <span className="mac-slider-label">Rate</span>
+                            <select
+                                value={arpeggiator.rate}
+                                onChange={(e) => setArpeggiator({ rate: e.target.value as '4n' | '8n' | '16n' })}
+                                disabled={!arpeggiator.enabled}
+                                style={{
+                                    fontFamily: 'inherit',
+                                    fontSize: 11,
+                                    padding: '2px 4px',
+                                    opacity: arpeggiator.enabled ? 1 : 0.5
+                                }}
+                            >
+                                <option value="4n">1/4</option>
+                                <option value="8n">1/8</option>
+                                <option value="16n">1/16</option>
+                            </select>
+                        </div>
+
+                        {/* Glissando */}
+                        <div className="mac-slider">
+                            <span className="mac-slider-label">Glissando</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="500"
+                                step="10"
+                                value={arpeggiator.glissando}
+                                onChange={(e) => setArpeggiator({ glissando: parseFloat(e.target.value) })}
+                                disabled={!arpeggiator.enabled}
+                                style={{ opacity: arpeggiator.enabled ? 1 : 0.5 }}
+                            />
+                            <span className="mac-slider-value">{arpeggiator.glissando}ms</span>
                         </div>
                     </div>
                 </div>

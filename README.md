@@ -23,6 +23,7 @@ El proyecto combina una estética retro inspirada en interfaces clásicas (Macin
   - **Formas de Onda**: Sine, Square, Sawtooth, Triangle.
   - **Filtros**: Lowpass, Highpass, Bandpass, Notch.
   - **Efectos**: Reverb, Delay (con Feedback), Chorus, Distortion, Tremolo, Noise Gate.
+- **Arpegiador**: Secuenciador de patrones (Up, Down, Random) sincronizado al tono actual, con efecto Glissando.
 - **Temas**: Interfaz personalizable con estéticas retro (Classic Mac, ANSI BBS, Terminal Green, Windows 3.1).
 
 ## Instalación y Ejecución
@@ -53,6 +54,10 @@ Para una guía detallada, consulta [ADDING_SOUNDS.md](./ADDING_SOUNDS.md).
 
 Los temas visuales están definidos en `app/src/core/visuals/themes.ts`. 
 Para una guía completa sobre cómo crear y modificar temas, consulta [ADDING_THEMES.md](./ADDING_THEMES.md).
+
+## Arquitectura
+
+Para entender cómo está construido el sistema (módulos, flujo de datos, componentes), consulta [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Tecnologías
 

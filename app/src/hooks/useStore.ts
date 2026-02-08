@@ -8,6 +8,8 @@ import { getPresetsByLayer } from '../core/audio/presets';
 import type { SynthPreset } from '../core/audio/presets';
 import { TONE_CLOCK_HOURS, getHour } from '../core/theory/ToneClock';
 import type { ToneClockHour } from '../core/theory/ToneClock';
+import type { ArpeggiatorSettings } from '../core/audio/Arpeggiator';
+import { defaultArpSettings } from '../core/audio/Arpeggiator';
 
 // Background pattern types
 export type BackgroundPattern = 'solid' | 'scanlines' | 'noise' | 'grid' | 'stars' | 'gradient';
@@ -24,6 +26,7 @@ export interface ChannelMixer {
     hour: { volume: number; muted: boolean };
     minute: { volume: number; muted: boolean };
     second: { volume: number; muted: boolean };
+    arp: { volume: number; muted: boolean };
 }
 
 export interface AppState {
@@ -43,6 +46,9 @@ export interface AppState {
 
     // Channel Mixer
     mixer: ChannelMixer;
+
+    // Arpeggiator
+    arpeggiator: ArpeggiatorSettings;
 
     // Time
     speed: number; // 0.1 to 10
@@ -69,8 +75,9 @@ export interface AppState {
         param: keyof SynthPreset,
         value: unknown
     ) => void;
-    setChannelVolume: (channel: 'hour' | 'minute' | 'second', volume: number) => void;
-    toggleChannelMute: (channel: 'hour' | 'minute' | 'second') => void;
+    setChannelVolume: (channel: 'hour' | 'minute' | 'second' | 'arp', volume: number) => void;
+    toggleChannelMute: (channel: 'hour' | 'minute' | 'second' | 'arp') => void;
+    setArpeggiator: (settings: Partial<ArpeggiatorSettings>) => void;
 }
 
 // Get default presets for each layer
@@ -105,7 +112,11 @@ export const useStore = create<AppState>()(
                 hour: { volume: defaultHourPreset.volume, muted: false },
                 minute: { volume: defaultMinutePreset.volume, muted: false },
                 second: { volume: defaultSecondPreset.volume, muted: false },
+                arp: { volume: -10, muted: false },
             },
+
+            // Arpeggiator
+            arpeggiator: { ...defaultArpSettings },
 
             // Time
             speed: 1.0,
@@ -214,7 +225,7 @@ export const useStore = create<AppState>()(
                 }
             },
 
-            setChannelVolume: (channel: 'hour' | 'minute' | 'second', volume: number) => {
+            setChannelVolume: (channel: 'hour' | 'minute' | 'second' | 'arp', volume: number) => {
                 const mixer = get().mixer;
                 set({
                     mixer: {
@@ -224,7 +235,7 @@ export const useStore = create<AppState>()(
                 });
             },
 
-            toggleChannelMute: (channel: 'hour' | 'minute' | 'second') => {
+            toggleChannelMute: (channel: 'hour' | 'minute' | 'second' | 'arp') => {
                 const mixer = get().mixer;
                 set({
                     mixer: {
@@ -233,9 +244,28 @@ export const useStore = create<AppState>()(
                     }
                 });
             },
+
+            setArpeggiator: (settings: Partial<ArpeggiatorSettings>) => {
+                set({
+                    arpeggiator: { ...get().arpeggiator, ...settings }
+                });
+            },
         }),
         {
             name: 'synthclock-storage',
+            version: 1,
+            migrate: (persistedState: any, version: number) => {
+                if (version === 0) {
+                    // Migration from version 0 to 1: Add arp channel and settings
+                    if (persistedState.mixer && !persistedState.mixer.arp) {
+                        persistedState.mixer.arp = { volume: -10, muted: false };
+                    }
+                    if (!persistedState.arpeggiator) {
+                        persistedState.arpeggiator = { ...defaultArpSettings };
+                    }
+                }
+                return persistedState as AppState;
+            },
             partialize: (state) => ({
                 currentThemeId: state.currentThemeId,
                 background: state.background,
