@@ -146,11 +146,15 @@ function App() {
     >
       {/* Toolbar */}
       <div className="toolbar">
-        <button className={`mac-button ${isPlaying ? 'primary' : ''}`} onClick={handlePlay}>
+        <button
+          className={`mac-button ${isPlaying ? 'primary' : ''}`}
+          onClick={handlePlay}
+          title={isPlaying ? 'Stop' : 'Play'}
+        >
           {isPlaying ? '■ Stop' : '▶ Play'}
         </button>
 
-        <div className="mac-slider" style={{ flex: 1, maxWidth: 200 }}>
+        <div className="mac-slider" style={{ flex: '1 1 200px', minWidth: '150px' }}>
           <span className="mac-slider-label">Speed</span>
           <input
             type="range"
@@ -163,7 +167,7 @@ function App() {
           <span className="mac-slider-value">{speed.toFixed(1)}x ({bpm} BPM)</span>
         </div>
 
-        <div className="mac-slider" style={{ flex: 1, maxWidth: 200 }}>
+        <div className="mac-slider" style={{ flex: '1 1 200px', minWidth: '150px' }}>
           <span className="mac-slider-label">Volume</span>
           <input
             type="range"
@@ -176,8 +180,12 @@ function App() {
           <span className="mac-slider-value">{masterVolume}dB</span>
         </div>
 
-        <button className="mac-button" onClick={toggleEditor}>
-          {showEditor ? 'Hide Editor' : 'Show Editor'}
+        <button
+          className="mac-button editor-toggle"
+          onClick={toggleEditor}
+          title={showEditor ? 'Hide Editor' : 'Show Editor'}
+        >
+          {showEditor ? 'Hide' : 'Editor'}
         </button>
 
         <a
@@ -238,6 +246,12 @@ function App() {
               >
                 Theory
               </div>
+              <div
+                className={`mac-tab ${editorTab === 'help' ? 'active' : ''}`}
+                onClick={() => setEditorTab('help')}
+              >
+                Help
+              </div>
             </div>
 
             {/* Tab Content */}
@@ -255,6 +269,7 @@ function App() {
               )}
               {editorTab === 'theme' && <ThemeSelector />}
               {editorTab === 'theory' && <TheoryPanel />}
+              {editorTab === 'help' && <HelpPanel />}
             </div>
           </div>
         )}
@@ -365,6 +380,69 @@ const TheoryPanel = () => {
               </a>
             </li>
           </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Help Panel Component
+const HelpPanel = () => {
+  const { theme } = useStore();
+
+  const handleReset = () => {
+    if (window.confirm('¿Estás seguro? Esto borrará todos tus ajustes y recargará la página.')) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
+  return (
+    <div className="mac-window" style={{ height: '100%' }}>
+      <div className="mac-window-title">
+        <span className="mac-window-title-text">Help & Settings</span>
+      </div>
+      <div className="mac-window-content" style={{ overflow: 'auto' }}>
+        <div className="mac-panel">
+          <div className="mac-panel-title">Quick Guide</div>
+          <ul style={{ fontSize: 12, paddingLeft: 20, marginBottom: 16 }}>
+            <li><strong>▶ Play:</strong> Start the generative music</li>
+            <li><strong>Speed:</strong> Controls how fast time passes (affects tempo)</li>
+            <li><strong>Volume:</strong> Master volume control</li>
+            <li><strong>Mixer:</strong> Individual volume for each layer (Hour/Min/Sec)</li>
+          </ul>
+          <p style={{ fontSize: 11, color: theme.colors.secondary }}>
+            The clock's hands select musical notes based on the Tone Clock theory.
+            Each hour corresponds to a unique trichord (3-note set).
+          </p>
+        </div>
+
+        <div className="mac-panel">
+          <div className="mac-panel-title">Layers</div>
+          <ul style={{ fontSize: 12, paddingLeft: 20 }}>
+            <li><strong>Hour:</strong> Ambient drone/pad (changes every hour)</li>
+            <li><strong>Minute:</strong> Melodic notes (triggers every minute)</li>
+            <li><strong>Second:</strong> Rhythmic clicks (triggers every second)</li>
+          </ul>
+        </div>
+
+        <div className="mac-panel">
+          <div className="mac-panel-title">Reset Settings</div>
+          <p style={{ fontSize: 11, marginBottom: 12 }}>
+            Clear all saved preferences and return to default settings.
+          </p>
+          <button
+            className="mac-button"
+            onClick={handleReset}
+            style={{
+              background: '#ff4444',
+              color: 'white',
+              border: '2px solid #cc0000',
+              width: '100%'
+            }}
+          >
+            🗑️ Reset All to Defaults
+          </button>
         </div>
       </div>
     </div>

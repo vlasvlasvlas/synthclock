@@ -52,7 +52,7 @@ export interface AppState {
 
     // UI
     showEditor: boolean;
-    editorTab: 'sounds' | 'theme' | 'background' | 'theory';
+    editorTab: 'sounds' | 'theme' | 'background' | 'theory' | 'help';
 
     // Actions
     setTheme: (themeId: string) => void;
@@ -63,7 +63,7 @@ export interface AppState {
     setSpeed: (speed: number) => void;
     setActiveHour: (hourNumber: number) => void;
     toggleEditor: () => void;
-    setEditorTab: (tab: 'sounds' | 'theme' | 'background' | 'theory') => void;
+    setEditorTab: (tab: 'sounds' | 'theme' | 'background' | 'theory' | 'help') => void;
     updatePresetParameter: (
         layer: 'hour' | 'minute' | 'second',
         param: keyof SynthPreset,
@@ -175,7 +175,7 @@ export const useStore = create<AppState>()(
                 set({ showEditor: !get().showEditor });
             },
 
-            setEditorTab: (tab: 'sounds' | 'theme' | 'background' | 'theory') => {
+            setEditorTab: (tab: 'sounds' | 'theme' | 'background' | 'theory' | 'help') => {
                 set({ editorTab: tab });
             },
 

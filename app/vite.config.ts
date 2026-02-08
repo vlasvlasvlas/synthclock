@@ -5,4 +5,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/synthclock/', // Base path for GitHub Pages
+  build: {
+    target: ['es2020', 'safari14', 'chrome87', 'firefox78'],
+  },
+  esbuild: {
+    target: 'es2020',
+  },
 })

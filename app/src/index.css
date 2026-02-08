@@ -38,8 +38,11 @@
 html,
 body {
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body {
@@ -52,7 +55,7 @@ body {
 
 #root {
   width: 100%;
-  height: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -443,6 +446,8 @@ input[type="range"]::-moz-range-thumb {
 .app-container {
   display: flex;
   flex-direction: column;
+  min-height: 100%;
+  /* Allow growth */
   height: 100%;
   background: var(--mac-light-gray);
   padding: var(--spacing-sm);
@@ -473,11 +478,79 @@ input[type="range"]::-moz-range-thumb {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
+  /* Allow wrapping on small screens */
   gap: var(--spacing-sm);
   padding: var(--spacing-sm);
   background: var(--mac-white);
   border: 1px solid var(--mac-black);
   margin-bottom: var(--spacing-sm);
+  align-items: center;
+  /* Center items vertically */
+}
+
+/* Responsive visibility helpers */
+.mobile-icon {
+  display: none;
+}
+
+.desktop-text {
+  display: inline;
+}
+
+.editor-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .toolbar {
+    flex-wrap: wrap;
+    justify-content: center;
+    /* Center items on small screens */
+    padding: var(--spacing-md);
+  }
+
+  .toolbar .mac-slider {
+    flex: 1 1 100% !important;
+    /* Force full width correctly */
+    width: 100%;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .toolbar .mac-button {
+    font-size: 16px;
+    padding: 8px 12px;
+    flex: 1;
+    /* Buttons share space */
+    text-align: center;
+  }
+
+  /* Stack content vertically on mobile */
+  .main-content {
+    flex-direction: column;
+    overflow: visible;
+    /* Let the body scroll */
+    height: auto;
+    flex: none;
+    /* Don't force flex growing if content is huge */
+  }
+
+  .clock-panel {
+    min-height: 350px;
+    /* Ensure space for clock */
+    overflow: visible;
+  }
+
+  .editor-panel {
+    width: 100% !important;
+    /* Override fixed width */
+    height: auto;
+    overflow: visible;
+    margin-top: var(--spacing-md);
+  }
 }
 
 .status-bar {
