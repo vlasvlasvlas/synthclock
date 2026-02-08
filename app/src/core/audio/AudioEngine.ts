@@ -1,0 +1,455 @@
+// Audio Engine - Synthesizer Factory and Player using Tone.js
+
+import * as Tone from 'tone';
+import type { SynthPreset, WaveformType } from './presets';
+
+// Valid oscillator types for Tone.js
+type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle';
+
+interface SynthChannel {
+    synth: Tone.PolySynth;
+    filter: Tone.Filter;
+    tremolo: Tone.Tremolo; // New
+    delay: Tone.FeedbackDelay;
+    reverb: Tone.Reverb;
+    gate: Tone.Gate;       // New
+    volume: Tone.Volume;
+    activeNotes: string[];
+    preset: SynthPreset;
+}
+
+class AudioEngine {
+    private channels: Map<string, SynthChannel> = new Map();
+    private isStarted = false;
+    private masterVolume: Tone.Volume;
+    private debug = true; // Enable debug logging
+
+    constructor() {
+        this.masterVolume = new Tone.Volume(-6).toDestination();
+        this.log('AudioEngine initialized');
+    }
+
+    // Debug logging
+    private log(message: string, data?: unknown): void {
+        if (this.debug) {
+            if (data !== undefined) {
+                console.log(`[AudioEngine] ${message}`, data);
+            } else {
+                console.log(`[AudioEngine] ${message}`);
+            }
+        }
+    }
+
+    private logError(message: string, error?: unknown): void {
+        console.error(`[AudioEngine ERROR] ${message}`, error);
+    }
+
+    // Initialize audio context (must be called after user interaction)
+    async start(): Promise<void> {
+        if (this.isStarted) {
+            this.log('Already started');
+            return;
+        }
+        try {
+            await Tone.start();
+            this.isStarted = true;
+            this.log('Audio context started successfully');
+        } catch (error) {
+            this.logError('Failed to start audio context', error);
+            throw error;
+        }
+    }
+
+    // Create a PolySynth based on preset configuration
+    private createSynth(preset: SynthPreset): Tone.PolySynth {
+        const oscillatorType = this.mapWaveform(preset.waveform);
+
+        try {
+            const polySynth = new Tone.PolySynth(Tone.Synth, {
+                envelope: {
+                    attack: preset.envelope.attack,
+                    decay: preset.envelope.decay,
+                    sustain: preset.envelope.sustain,
+                    release: preset.envelope.release,
+                },
+            });
+
+            // Set oscillator type after creation
+            polySynth.set({
+                oscillator: { type: oscillatorType },
+            });
+
+            this.log(`Synth created with waveform: ${oscillatorType}`);
+            return polySynth;
+        } catch (error) {
+            this.logError('Failed to create synth', error);
+            // Return basic synth as fallback
+            return new Tone.PolySynth(Tone.Synth);
+        }
+    }
+
+    // Map our waveform types to Tone.js oscillator types
+    private mapWaveform(waveform: WaveformType): OscillatorType {
+        const map: Record<WaveformType, OscillatorType> = {
+            sine: 'sine',
+            square: 'square',
+            sawtooth: 'sawtooth',
+            triangle: 'triangle',
+        };
+        return map[waveform] || 'sine';
+    }
+
+    // Create a complete channel with effects chain
+    async createChannel(channelId: string, preset: SynthPreset): Promise<void> {
+        this.log(`Creating channel: ${channelId}`, { preset: preset.name });
+
+        try {
+            // Dispose existing channel if any
+            this.disposeChannel(channelId);
+
+            const synth = this.createSynth(preset);
+
+            // Create effects chain with safe defaults
+            const filter = new Tone.Filter({
+                type: preset.filter?.type || 'lowpass',
+                frequency: preset.filter?.frequency || 2000,
+                Q: preset.filter?.resonance || 1,
+            });
+
+            // Reverb - use generate() for proper initialization
+            const reverb = new Tone.Reverb({
+                decay: Math.max(0.1, Math.min(10, preset.effects?.reverb ? 4 : 0.1)),
+                wet: Math.max(0, Math.min(1, preset.effects?.reverb || 0)),
+            });
+
+            // Initialize reverb (it needs to generate impulse response)
+            try {
+                await reverb.generate();
+                this.log(`Reverb initialized for channel ${channelId}`);
+            } catch (error) {
+                this.logError(`Failed to initialize reverb for ${channelId}`, error);
+            }
+
+            // Tremolo
+            const tremolo = new Tone.Tremolo({
+                frequency: 9, // Fast tremolo
+                depth: Math.max(0, Math.min(1, preset.effects?.tremolo || 0)),
+                spread: 180,
+            }).start();
+            // Start tremolo LFO 
+
+            // Noise Gate (Threshold)
+            const gate = new Tone.Gate({
+                threshold: Math.max(-100, Math.min(0, preset.effects?.noiseGate || -100)),
+                smoothing: 0.1,
+            });
+
+            const delay = new Tone.FeedbackDelay({
+                delayTime: Math.max(0.01, Math.min(1, preset.effects?.delayTime || 0.25)),
+                feedback: Math.max(0, Math.min(0.9, preset.effects?.delayFeedback ?? 0.6)),
+                wet: Math.max(0, Math.min(1, preset.effects?.delay || 0)),
+            });
+
+            const volume = new Tone.Volume(preset.volume || -12);
+
+            // Connect chain: synth -> filter -> gate -> tremolo -> delay -> reverb -> volume -> master
+            synth.connect(filter);
+            filter.connect(gate);
+            gate.connect(tremolo);
+            tremolo.connect(delay);
+            delay.connect(reverb);
+            reverb.connect(volume);
+            volume.connect(this.masterVolume);
+
+            // Store channel
+            this.channels.set(channelId, {
+                synth,
+                filter,
+                tremolo,
+                delay,
+                reverb,
+                gate,
+                volume,
+                activeNotes: [],
+                preset,
+            });
+
+            this.log(`Channel ${channelId} created successfully with preset: ${preset.name}`);
+        } catch (error) {
+            this.logError(`Failed to create channel ${channelId}`, error);
+        }
+    }
+
+    // Play a note on a channel (attack + release after duration)
+    playNote(channelId: string, note: string, duration: string = '4n'): void {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            this.log(`Channel ${channelId} not found`);
+            return;
+        }
+        if (!this.isStarted) {
+            this.log('Audio not started yet');
+            return;
+        }
+
+        try {
+            channel.synth.triggerAttackRelease(note, duration);
+            this.log(`Playing note ${note} on ${channelId} for ${duration}`);
+        } catch (error) {
+            this.logError(`Failed to play note ${note} on ${channelId}`, error);
+        }
+    }
+
+    // Play multiple notes as a chord
+    playChord(channelId: string, notes: string[], duration: string = '4n'): void {
+        const channel = this.channels.get(channelId);
+        if (!channel || !this.isStarted) return;
+
+        try {
+            channel.synth.triggerAttackRelease(notes, duration);
+            this.log(`Playing chord on ${channelId}:`, notes);
+        } catch (error) {
+            this.logError(`Failed to play chord on ${channelId}`, error);
+        }
+    }
+
+    // Trigger attack (note on) - for sustained notes/drones
+    triggerAttack(channelId: string, note: string): void {
+        const channel = this.channels.get(channelId);
+        if (!channel || !this.isStarted) return;
+
+        try {
+            channel.synth.triggerAttack(note);
+            channel.activeNotes.push(note);
+            this.log(`Attack ${note} on ${channelId}`);
+        } catch (error) {
+            this.logError(`Failed to trigger attack on ${channelId}`, error);
+        }
+    }
+
+    // Trigger attack for multiple notes (chord drone)
+    triggerAttackChord(channelId: string, notes: string[]): void {
+        const channel = this.channels.get(channelId);
+        if (!channel || !this.isStarted) {
+            this.log(`Cannot trigger chord - channel ${channelId} not ready`);
+            return;
+        }
+
+        try {
+            channel.synth.triggerAttack(notes);
+            channel.activeNotes.push(...notes);
+            this.log(`Attack chord on ${channelId}:`, notes);
+        } catch (error) {
+            this.logError(`Failed to trigger attack chord on ${channelId}`, error);
+        }
+    }
+
+    // Trigger release (note off) - releases all active notes
+    triggerRelease(channelId: string): void {
+        const channel = this.channels.get(channelId);
+        if (!channel || !this.isStarted) return;
+
+        try {
+            if (channel.activeNotes.length > 0) {
+                channel.synth.triggerRelease(channel.activeNotes);
+                this.log(`Released ${channel.activeNotes.length} notes on ${channelId}`);
+                channel.activeNotes = [];
+            }
+        } catch (error) {
+            this.logError(`Failed to trigger release on ${channelId}`, error);
+        }
+    }
+
+    // Release specific notes
+    triggerReleaseNotes(channelId: string, notes: string[]): void {
+        const channel = this.channels.get(channelId);
+        if (!channel || !this.isStarted) return;
+
+        try {
+            channel.synth.triggerRelease(notes);
+            channel.activeNotes = channel.activeNotes.filter(n => !notes.includes(n));
+        } catch (error) {
+            this.logError(`Failed to release notes on ${channelId}`, error);
+        }
+    }
+
+    // Update preset for a channel
+    async updateChannel(channelId: string, preset: SynthPreset): Promise<void> {
+        await this.createChannel(channelId, preset);
+    }
+
+    // Update individual parameter in real-time
+    updateParameter(
+        channelId: string,
+        param: 'filterFreq' | 'filterRes' | 'reverb' | 'delay' | 'volume',
+        value: number
+    ): void {
+        const channel = this.channels.get(channelId);
+        if (!channel) return;
+
+        try {
+            const safeValue = Math.max(0, value);
+
+            switch (param) {
+                case 'filterFreq':
+                    channel.filter.frequency.value = Math.max(20, Math.min(20000, safeValue));
+                    break;
+                case 'filterRes':
+                    channel.filter.Q.value = Math.max(0, Math.min(20, safeValue));
+                    break;
+                case 'reverb':
+                    channel.reverb.wet.value = Math.max(0, Math.min(1, safeValue));
+                    break;
+                case 'delay':
+                    channel.delay.wet.value = Math.max(0, Math.min(1, safeValue));
+                    break;
+                case 'volume':
+                    channel.volume.volume.value = Math.max(-60, Math.min(6, value));
+                    break;
+            }
+            this.log(`Updated ${param} on ${channelId} to ${value}`);
+        } catch (error) {
+            this.logError(`Failed to update ${param} on ${channelId}`, error);
+        }
+    }
+
+    // Update synth parameters in real-time WITHOUT recreating the channel
+    // This keeps the sound playing while updating parameters
+    updateSynthParams(channelId: string, preset: SynthPreset): void {
+        const channel = this.channels.get(channelId);
+        if (!channel) {
+            this.log(`Channel ${channelId} not found for update`);
+            return;
+        }
+
+        try {
+            // Update oscillator type
+            const oscillatorType = this.mapWaveform(preset.waveform);
+            channel.synth.set({
+                oscillator: { type: oscillatorType },
+            });
+
+            // Update envelope
+            channel.synth.set({
+                envelope: {
+                    attack: preset.envelope.attack,
+                    decay: preset.envelope.decay,
+                    sustain: preset.envelope.sustain,
+                    release: preset.envelope.release,
+                },
+            });
+
+            // Update filter
+            channel.filter.frequency.value = preset.filter?.frequency || 2000;
+            channel.filter.Q.value = preset.filter?.resonance || 1;
+            if (preset.filter?.type) {
+                channel.filter.type = preset.filter.type;
+            }
+
+            // Update effects wet levels (without recreating)
+            channel.reverb.wet.value = Math.max(0, Math.min(1, preset.effects?.reverb || 0));
+            channel.delay.wet.value = Math.max(0, Math.min(1, preset.effects?.delay || 0));
+
+            // Update tremolo
+            channel.tremolo.depth.value = Math.max(0, Math.min(1, preset.effects?.tremolo || 0));
+            // Ensure wetter is 1 for tremolo effect (controlled by depth) or handle wet mix
+            channel.tremolo.wet.value = channel.tremolo.depth.value > 0 ? 1 : 0;
+
+            // Update gate
+            const gateThresh = Math.max(-100, Math.min(0, preset.effects?.noiseGate || -100));
+            // @ts-ignore - Tone.js types might be slightly off here depending on version, treating as property to be safe or signal if ignored
+            if (channel.gate.threshold instanceof Tone.Signal) {
+                channel.gate.threshold.value = gateThresh;
+            } else {
+                // @ts-ignore
+                channel.gate.threshold = gateThresh;
+            }
+
+            // Update delay time and feedback smoothly
+            if (preset.effects?.delayTime) {
+                channel.delay.delayTime.value = Math.max(0.01, Math.min(1, preset.effects.delayTime));
+            }
+            // Update feedback for more/less echoes
+            channel.delay.feedback.value = Math.max(0, Math.min(0.9, preset.effects?.delayFeedback ?? 0.6));
+
+            // Update volume - DEPRECATED: Volume is now controlled by the Mixer
+            // channel.volume.volume.value = preset.volume || -12;
+
+            // Update stored preset reference
+            channel.preset = preset;
+
+            this.log(`Updated synth params for ${channelId} without recreation`);
+        } catch (error) {
+            this.logError(`Failed to update synth params for ${channelId}`, error);
+        }
+    }
+
+    // Dispose a channel
+    disposeChannel(channelId: string): void {
+        const channel = this.channels.get(channelId);
+        if (!channel) return;
+
+        try {
+            // Release any active notes first
+            if (channel.activeNotes.length > 0) {
+                try {
+                    channel.synth.triggerRelease(channel.activeNotes);
+                } catch (e) {
+                    // Ignore release errors during disposal
+                }
+            }
+
+            channel.synth.dispose();
+            channel.filter.dispose();
+            channel.tremolo.dispose();
+            channel.gate.dispose();
+            channel.reverb.dispose();
+            channel.delay.dispose();
+            channel.volume.dispose();
+
+            this.channels.delete(channelId);
+            this.log(`Channel ${channelId} disposed`);
+        } catch (error) {
+            this.logError(`Error disposing channel ${channelId}`, error);
+        }
+    }
+
+    // Dispose all channels
+    disposeAll(): void {
+        this.channels.forEach((_, id) => this.disposeChannel(id));
+    }
+
+    // Set master volume
+    setMasterVolume(db: number): void {
+        try {
+            this.masterVolume.volume.value = Math.max(-60, Math.min(6, db));
+            this.log(`Master volume set to ${db}dB`);
+        } catch (error) {
+            this.logError('Failed to set master volume', error);
+        }
+    }
+
+    // Get current time from Tone.js transport
+    getTime(): number {
+        return Tone.now();
+    }
+
+    // Check if audio is started
+    getIsStarted(): boolean {
+        return this.isStarted;
+    }
+
+    // Get channel info for debugging
+    getChannelInfo(channelId: string): { activeNotes: string[], preset: string } | null {
+        const channel = this.channels.get(channelId);
+        if (!channel) return null;
+        return {
+            activeNotes: [...channel.activeNotes],
+            preset: channel.preset.name,
+        };
+    }
+}
+
+// Singleton instance
+export const audioEngine = new AudioEngine();
+export default AudioEngine;
