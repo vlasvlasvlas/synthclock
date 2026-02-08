@@ -150,6 +150,19 @@ export const ClockDisplay = ({ size = 300 }: ClockDisplayProps) => {
                 {String(time.seconds).padStart(2, '0')}
             </div>
 
+            {/* Date Display */}
+            <div style={{
+                textAlign: 'center',
+                margin: '8px 0',
+                fontFamily: theme.fontFamily,
+                color: theme.colors.foreground,
+                fontSize: 18,
+                fontWeight: 'bold',
+                letterSpacing: 2,
+            }}>
+                {time.day} {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][time.month]} {time.year}
+            </div>
+
             {/* Tone Clock Info */}
             <ToneClockInfo hour={toneClockState.activeHour} trichord={toneClockState.currentTrichord} />
         </div>

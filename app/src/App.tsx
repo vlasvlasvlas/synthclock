@@ -31,6 +31,8 @@ function App() {
     secondPreset,
     background,
     arpeggiator: arpSettings,
+    isReverse,
+    setIsReverse,
   } = useStore();
 
   // Calculate BPM from speed (base 60 BPM at 1x speed)
@@ -102,6 +104,11 @@ function App() {
   useEffect(() => {
     timeDilator.setSpeed(speed);
   }, [speed]);
+
+  // Sync reverse mode
+  useEffect(() => {
+    timeDilator.setReverse(isReverse);
+  }, [isReverse]);
 
   // Update master volume
   useEffect(() => {
@@ -213,6 +220,17 @@ function App() {
         >
           {isPlaying ? '■ Stop' : '▶ Play'}
         </button>
+
+        <div className="mac-checkbox-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 8px' }}>
+          <label className="mac-slider-label" style={{ marginBottom: 2, fontSize: 10 }}>REV</label>
+          <input
+            type="checkbox"
+            checked={isReverse}
+            onChange={(e) => setIsReverse(e.target.checked)}
+            style={{ margin: 0 }}
+            title="Reverse Time"
+          />
+        </div>
 
         <div className="mac-slider" style={{ flex: '1 1 200px', minWidth: '150px' }}>
           <span className="mac-slider-label">Speed</span>

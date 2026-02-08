@@ -9,6 +9,13 @@ export interface TimeState {
     speed: number;
     // Whether the clock is running
     isRunning: boolean;
+    // Reverse mode
+    isReverse: boolean;
+    // Date information
+    day: number;
+    month: number;
+    year: number;
+    weekday: number;
 }
 
 export interface TimeEvent {
@@ -20,9 +27,21 @@ export interface TimeEvent {
 type TimeEventCallback = (event: TimeEvent) => void;
 
 class TimeDilator {
-    private state: TimeState;
+    private state: TimeState = {
+        hours: 12,
+        minutes: 0,
+        seconds: 0,
+        milliseconds: 0,
+        speed: 1.0,
+        isRunning: false,
+        isReverse: false,
+        day: 1,
+        month: 0,
+        year: 2024,
+        weekday: 0
+    };
     private lastRealTime: number = 0;
-    private accumulatedTime: number = 0;
+    private currentVirtualTime: number = Date.now();
     private intervalId: ReturnType<typeof setInterval> | null = null;
     private callbacks: Map<string, TimeEventCallback> = new Map();
     private lastSecond: number = -1;
@@ -30,14 +49,23 @@ class TimeDilator {
     private lastHour: number = -1;
 
     constructor() {
-        const now = new Date();
+        this.updateStateFromTimestamp();
+    }
+
+    private updateStateFromTimestamp() {
+        const date = new Date(this.currentVirtualTime);
         this.state = {
-            hours: now.getHours() % 12 || 12,
-            minutes: now.getMinutes(),
-            seconds: now.getSeconds(),
-            milliseconds: now.getMilliseconds(),
-            speed: 1.0,
-            isRunning: false,
+            hours: date.getHours() % 12 || 12, // 12-hour format for Tone Clock
+            minutes: date.getMinutes(),
+            seconds: date.getSeconds(),
+            milliseconds: date.getMilliseconds(),
+            speed: this.state?.speed ?? 1.0,
+            isRunning: this.state?.isRunning ?? false,
+            isReverse: this.state?.isReverse ?? false,
+            day: date.getDate(),
+            month: date.getMonth(),
+            year: date.getFullYear(),
+            weekday: date.getDay()
         };
     }
 
@@ -46,17 +74,24 @@ class TimeDilator {
         return { ...this.state };
     }
 
+    // Get current Date object
+    getDate(): Date {
+        return new Date(this.currentVirtualTime);
+    }
+
     // Get angle for each hand (in radians, 0 = 12 o'clock, clockwise)
     getAngles(): { hour: number; minute: number; second: number } {
         const { hours, minutes, seconds, milliseconds } = this.state;
 
-        // Second hand: 60 seconds = 2π, smooth movement with milliseconds
+        // In reverse mode, hands move counter-clockwise naturally as time decreases
+
+        // Second hand: 60 seconds = 2π
         const secondAngle = ((seconds + milliseconds / 1000) / 60) * Math.PI * 2 - Math.PI / 2;
 
-        // Minute hand: 60 minutes = 2π, influenced by seconds
+        // Minute hand: 60 minutes = 2π
         const minuteAngle = ((minutes + seconds / 60) / 60) * Math.PI * 2 - Math.PI / 2;
 
-        // Hour hand: 12 hours = 2π, influenced by minutes
+        // Hour hand: 12 hours = 2π
         const hourAngle = ((hours + minutes / 60) / 12) * Math.PI * 2 - Math.PI / 2;
 
         return { hour: hourAngle, minute: minuteAngle, second: secondAngle };
@@ -65,6 +100,11 @@ class TimeDilator {
     // Set speed multiplier
     setSpeed(speed: number): void {
         this.state.speed = Math.max(0.1, Math.min(10, speed));
+    }
+
+    // Set reverse mode
+    setReverse(isReverse: boolean): void {
+        this.state.isReverse = isReverse;
     }
 
     // Get speed
@@ -87,8 +127,7 @@ class TimeDilator {
         this.callbacks.forEach(callback => callback(event));
     }
 
-    // Update loop - using setInterval instead of requestAnimationFrame
-    // so it continues running when tab is not visible (important for audio)
+    // Update loop
     private update = (): void => {
         if (!this.state.isRunning) return;
 
@@ -96,34 +135,32 @@ class TimeDilator {
         const deltaReal = now - this.lastRealTime;
         this.lastRealTime = now;
 
-        // Apply speed multiplier to elapsed time
+        // Apply speed multiplier
         const deltaVirtual = deltaReal * this.state.speed;
-        this.accumulatedTime += deltaVirtual;
 
-        // Update virtual time
-        const totalMs = this.accumulatedTime;
-        const totalSeconds = Math.floor(totalMs / 1000);
-        const totalMinutes = Math.floor(totalSeconds / 60);
-        const totalHours = Math.floor(totalMinutes / 60);
+        // Apply direction
+        if (this.state.isReverse) {
+            this.currentVirtualTime -= deltaVirtual;
+        } else {
+            this.currentVirtualTime += deltaVirtual;
+        }
 
-        this.state.milliseconds = totalMs % 1000;
-        this.state.seconds = totalSeconds % 60;
-        this.state.minutes = totalMinutes % 60;
-        this.state.hours = (totalHours % 12) || 12;
+        this.updateStateFromTimestamp();
 
         // Emit events on transitions
+        // Note: checking integers for changes works for both forward and reverse
         if (this.state.seconds !== this.lastSecond) {
-            this.emit({ type: 'second', value: this.state.seconds, timestamp: now });
+            this.emit({ type: 'second', value: this.state.seconds, timestamp: this.currentVirtualTime });
             this.lastSecond = this.state.seconds;
         }
 
         if (this.state.minutes !== this.lastMinute) {
-            this.emit({ type: 'minute', value: this.state.minutes, timestamp: now });
+            this.emit({ type: 'minute', value: this.state.minutes, timestamp: this.currentVirtualTime });
             this.lastMinute = this.state.minutes;
         }
 
         if (this.state.hours !== this.lastHour) {
-            this.emit({ type: 'hour', value: this.state.hours, timestamp: now });
+            this.emit({ type: 'hour', value: this.state.hours, timestamp: this.currentVirtualTime });
             this.lastHour = this.state.hours;
         }
     };
@@ -132,28 +169,18 @@ class TimeDilator {
     start(): void {
         if (this.state.isRunning) return;
 
-        // Initialize from current real time
-        const now = new Date();
-        this.state.hours = now.getHours() % 12 || 12;
-        this.state.minutes = now.getMinutes();
-        this.state.seconds = now.getSeconds();
-        this.state.milliseconds = now.getMilliseconds();
-
-        // Calculate total accumulated time
-        this.accumulatedTime =
-            this.state.hours * 3600000 +
-            this.state.minutes * 60000 +
-            this.state.seconds * 1000 +
-            this.state.milliseconds;
+        // If starting for first time (or reset), confirm current time
+        // But we want to preserve paused time, so only set if not set?
+        // Actually constructor sets it. We just need to reset delta tracking.
 
         this.lastRealTime = performance.now();
         this.state.isRunning = true;
+
+        // Update tracking vars to avoid immediate trigger
         this.lastSecond = this.state.seconds;
         this.lastMinute = this.state.minutes;
         this.lastHour = this.state.hours;
 
-        // Use setInterval instead of requestAnimationFrame
-        // so it continues running when tab is not visible
         this.intervalId = setInterval(this.update, 16); // ~60fps
         console.log('TimeDilator started');
     }
@@ -172,25 +199,30 @@ class TimeDilator {
     reset(): void {
         const wasRunning = this.state.isRunning;
         this.stop();
+        this.currentVirtualTime = Date.now();
+        this.updateStateFromTimestamp();
+
         if (wasRunning) {
             this.start();
         }
     }
 
-    // Set a specific time manually
+    // Set a specific time manually (preserving date)
     setTime(hours: number, minutes: number, seconds: number): void {
-        this.state.hours = hours % 12 || 12;
-        this.state.minutes = minutes % 60;
-        this.state.seconds = seconds % 60;
-        this.state.milliseconds = 0;
+        const date = new Date(this.currentVirtualTime);
+        date.setHours(hours); // Note: this uses 0-23, ToneClock uses 1-12. 
+        // We might need a way to distinct AM/PM or just assume nearest?
+        // For now, let's keep simple hour setting. 
+        // If coming from UI 1-12, we might be changing AM/PM inadvertently.
+        // Assuming hours is 0-23 for this method.
 
-        this.accumulatedTime =
-            this.state.hours * 3600000 +
-            this.state.minutes * 60000 +
-            this.state.seconds * 1000;
+        date.setMinutes(minutes);
+        date.setSeconds(seconds);
+        this.currentVirtualTime = date.getTime();
+        this.updateStateFromTimestamp();
     }
 }
 
 // Singleton instance
 export const timeDilator = new TimeDilator();
-export default TimeDilator;
+

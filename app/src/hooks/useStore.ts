@@ -52,6 +52,7 @@ export interface AppState {
 
     // Time
     speed: number; // 0.1 to 10
+    isReverse: boolean;
 
     // Tone Clock
     activeHour: ToneClockHour;
@@ -67,6 +68,7 @@ export interface AppState {
     setMasterVolume: (volume: number) => void;
     setPreset: (layer: 'hour' | 'minute' | 'second', preset: SynthPreset) => void;
     setSpeed: (speed: number) => void;
+    setIsReverse: (isReverse: boolean) => void;
     setActiveHour: (hourNumber: number) => void;
     toggleEditor: () => void;
     setEditorTab: (tab: 'sounds' | 'theme' | 'background' | 'theory' | 'help') => void;
@@ -120,6 +122,7 @@ export const useStore = create<AppState>()(
 
             // Time
             speed: 1.0,
+            isReverse: false,
 
             // Tone Clock - start at Hour 12 (matches 12:00)
             activeHour: TONE_CLOCK_HOURS[11], // Hour 12 (Augmented)
@@ -173,6 +176,10 @@ export const useStore = create<AppState>()(
 
             setSpeed: (speed: number) => {
                 set({ speed: Math.max(0.1, Math.min(10, speed)) });
+            },
+
+            setIsReverse: (isReverse: boolean) => {
+                set({ isReverse });
             },
 
             setActiveHour: (hourNumber: number) => {
