@@ -54,9 +54,56 @@ class AudioEngine {
             await Tone.start();
             this.isStarted = true;
             this.log('Audio context started successfully');
+
+            // Setup Media Session API for background playback on mobile
+            this.setupMediaSession();
         } catch (error) {
             this.logError('Failed to start audio context', error);
             throw error;
+        }
+    }
+
+    // Setup Media Session for background audio (iOS/Android)
+    private setupMediaSession(): void {
+        if ('mediaSession' in navigator) {
+            try {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: 'SynthClock',
+                    artist: 'Generative Tone Clock',
+                    album: 'Time-based Music',
+                });
+
+                // Handle play/pause from lock screen
+                navigator.mediaSession.setActionHandler('play', () => {
+                    this.log('Media Session: play requested');
+                    Tone.getTransport().start();
+                });
+
+                navigator.mediaSession.setActionHandler('pause', () => {
+                    this.log('Media Session: pause requested');
+                    // Don't actually pause - keep playing in background
+                });
+
+                this.log('Media Session API configured');
+            } catch (error) {
+                this.log('Media Session API not fully supported', error);
+            }
+        }
+
+        // Create a silent audio element to keep audio context alive
+        this.createSilentAudioKeepAlive();
+    }
+
+    // Create silent audio to prevent iOS from suspending audio context
+    private createSilentAudioKeepAlive(): void {
+        try {
+            // Create oscillator that outputs silence but keeps context alive
+            const silentGain = new Tone.Gain(0).toDestination();
+            const silentOsc = new Tone.Oscillator(1, 'sine').connect(silentGain);
+            silentOsc.start();
+            this.log('Silent keep-alive oscillator created');
+        } catch (error) {
+            this.log('Failed to create keep-alive oscillator', error);
         }
     }
 

@@ -51,7 +51,8 @@ Para una guía detallada, consulta [ADDING_SOUNDS.md](./ADDING_SOUNDS.md).
 
 ### Temas
 
-Los temas visuales están definidos en `app/src/core/visuals/themes.ts`. Puedes modificar los colores y caracteres ASCII existentes o agregar nuevos temas siguiendo la estructura de tipos definida.
+Los temas visuales están definidos en `app/src/core/visuals/themes.ts`. 
+Para una guía completa sobre cómo crear y modificar temas, consulta [ADDING_THEMES.md](./ADDING_THEMES.md).
 
 ## Tecnologías
 

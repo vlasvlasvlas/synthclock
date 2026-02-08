@@ -314,20 +314,6 @@ export const SoundEditor = () => {
                             <span className="mac-slider-value">{currentPreset.effects.noiseGate || -100}dB</span>
                         </div>
                     </div>
-
-                    {/* Volume */}
-                    <div className="mac-slider">
-                        <span className="mac-slider-label">Volume</span>
-                        <input
-                            type="range"
-                            min="-60"
-                            max="0"
-                            step="1"
-                            value={currentPreset.volume}
-                            onChange={(e) => updatePresetParameter(activeLayer, 'volume', parseFloat(e.target.value))}
-                        />
-                        <span className="mac-slider-value">{currentPreset.volume}dB</span>
-                    </div>
                 </div>
             </div>
         </div>
