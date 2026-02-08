@@ -304,7 +304,8 @@ class AudioEngine {
                     channel.delay.wet.value = Math.max(0, Math.min(1, safeValue));
                     break;
                 case 'volume':
-                    channel.volume.volume.value = Math.max(-60, Math.min(6, value));
+                    // If value is at minimum (-60 or lower), mute completely with -Infinity
+                    channel.volume.volume.value = value <= -60 ? -Infinity : Math.max(-60, Math.min(6, value));
                     break;
             }
             this.log(`Updated ${param} on ${channelId} to ${value}`);

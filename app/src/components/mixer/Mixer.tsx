@@ -52,7 +52,7 @@ export const Mixer = () => {
                     {/* Volume Slider (horizontal) */}
                     <input
                         type="range"
-                        min="-24"
+                        min="-60"
                         max="6"
                         step="1"
                         value={mixer[ch.id].volume}
