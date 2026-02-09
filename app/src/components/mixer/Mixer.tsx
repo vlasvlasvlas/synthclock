@@ -4,7 +4,11 @@ import { useStore } from '../../hooks/useStore';
 import { audioEngine } from '../../core/audio/AudioEngine';
 import { useEffect, useRef } from 'react';
 
-export const Mixer = () => {
+interface MixerProps {
+    activeLayer?: 'hour' | 'minute' | 'second' | null;
+}
+
+export const Mixer = ({ activeLayer }: MixerProps) => {
     const { mixer, setChannelVolume, toggleChannelMute, theme } = useStore();
 
     // Track previous values to avoid unnecessary updates
@@ -61,12 +65,18 @@ export const Mixer = () => {
                         alignItems: 'center',
                         gap: 4,
                         minWidth: 60,
+                        padding: 4,
+                        borderRadius: 4,
+                        background: activeLayer === ch.id ? `${theme.colors.primary}33` : 'transparent',
+                        transition: 'background 0.1s ease-in-out',
                     }}>
                         {/* Channel Label */}
                         <span style={{
                             fontSize: 11,
                             fontWeight: 'bold',
                             opacity: channelState.muted ? 0.4 : 1,
+                            color: activeLayer === ch.id ? theme.colors.primary : 'inherit',
+                            transition: 'color 0.1s ease-in-out',
                         }}>
                             {ch.short}
                         </span>

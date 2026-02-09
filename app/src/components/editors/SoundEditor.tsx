@@ -372,7 +372,7 @@ export const SoundEditor = () => {
                             <input
                                 type="range"
                                 min="0"
-                                max="500"
+                                max="2000"
                                 step="10"
                                 value={arpeggiator.glissando}
                                 onChange={(e) => setArpeggiator({ glissando: parseFloat(e.target.value) })}

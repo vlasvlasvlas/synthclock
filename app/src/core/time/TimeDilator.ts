@@ -169,9 +169,11 @@ class TimeDilator {
     start(): void {
         if (this.state.isRunning) return;
 
-        // If starting for first time (or reset), confirm current time
-        // But we want to preserve paused time, so only set if not set?
-        // Actually constructor sets it. We just need to reset delta tracking.
+        // Safety: clean up any orphaned interval before creating a new one
+        if (this.intervalId !== null) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
 
         this.lastRealTime = performance.now();
         this.state.isRunning = true;

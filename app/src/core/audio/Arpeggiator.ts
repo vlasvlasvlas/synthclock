@@ -9,7 +9,7 @@ export interface ArpeggiatorSettings {
     enabled: boolean;
     pattern: ArpPattern;
     rate: ArpRate;
-    glissando: number; // Portamento time in ms (0-500)
+    glissando: number; // Portamento time in ms (0-2000)
 }
 
 export const defaultArpSettings: ArpeggiatorSettings = {

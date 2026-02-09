@@ -22,7 +22,7 @@ class AudioEngine {
     private channels: Map<string, SynthChannel> = new Map();
     private isStarted = false;
     private masterVolume: Tone.Volume;
-    private debug = true; // Enable debug logging
+    private debug = import.meta.env.DEV; // Enable debug logging only in dev mode
 
     // Dedicated MonoSynth for arpeggiator with portamento
     private arpSynth: Tone.MonoSynth | null = null;

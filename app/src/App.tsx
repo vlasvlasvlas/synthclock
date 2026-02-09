@@ -11,6 +11,7 @@ import { audioEngine } from './core/audio/AudioEngine';
 import { timeDilator } from './core/time/TimeDilator';
 import { mapTimeToToneClock, pitchClassToNote, TONE_CLOCK_HOURS } from './core/theory/ToneClock';
 import { arpeggiator } from './core/audio/Arpeggiator';
+import * as Tone from 'tone';
 
 function App() {
   const {
@@ -39,6 +40,8 @@ function App() {
   const bpm = Math.round(60 * speed);
 
   const [audioStarted, setAudioStarted] = useState(false);
+  // Track which layer is currently active (for visual feedback)
+  const [activeLayer, setActiveLayer] = useState<'hour' | 'minute' | 'second' | null>(null);
 
   // Update audio channels when presets change (without recreating = no sound cut)
   useEffect(() => {
@@ -78,18 +81,29 @@ function App() {
         // Play second layer sound - individual note from trichord (fast clicks)
         const note = pitchClassToNote(toneState.currentTrichord[event.value % 3], 5);
         audioEngine.playNote('second', note, '32n');
+        // Visual feedback: flash second layer
+        setActiveLayer('second');
+        setTimeout(() => setActiveLayer(null), 100);
       }
 
       if (event.type === 'minute') {
         // Play minute layer sound - melodic note
         const note = pitchClassToNote(toneState.currentTrichord[1], 4);
         audioEngine.playNote('minute', note, '2n');
+        // Visual feedback: flash minute layer (longer since 2n note)
+        setActiveLayer('minute');
+        setTimeout(() => setActiveLayer(null), 300);
       }
 
       if (event.type === 'hour') {
         // Hour changed - update the drone with new trichord
+        // Visual feedback: flash hour layer (sustained feedback)
+        setActiveLayer('hour');
         stopHourDrone();
-        setTimeout(() => startHourDrone(), 100);
+        setTimeout(() => {
+          startHourDrone();
+          setTimeout(() => setActiveLayer(null), 500);
+        }, 100);
       }
     };
 
@@ -100,9 +114,11 @@ function App() {
     };
   }, [isPlaying, audioStarted]);
 
-  // Update speed
+  // Update speed and sync Transport BPM
   useEffect(() => {
     timeDilator.setSpeed(speed);
+    // Sync Tone.js Transport BPM with our speed (P2: BPM sync)
+    Tone.getTransport().bpm.value = 60 * speed;
   }, [speed]);
 
   // Sync reverse mode
@@ -295,7 +311,7 @@ function App() {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'flex-start',
           }}>
             <ClockDisplay size={280} />
           </div>
@@ -339,7 +355,7 @@ function App() {
                   {/* Channel Mixer - arriba */}
                   <div style={{ marginBottom: 16, borderBottom: '1px solid', paddingBottom: 8 }}>
                     <div style={{ fontWeight: 'bold', marginBottom: 8 }}>Mixer</div>
-                    <Mixer />
+                    <Mixer activeLayer={activeLayer} />
                   </div>
                   {/* Sound Editor - abajo */}
                   <SoundEditor />

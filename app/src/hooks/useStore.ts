@@ -59,7 +59,7 @@ export interface AppState {
 
     // UI
     showEditor: boolean;
-    editorTab: 'sounds' | 'theme' | 'background' | 'theory' | 'help';
+    editorTab: 'sounds' | 'theme' | 'theory' | 'help';
 
     // Actions
     setTheme: (themeId: string) => void;
@@ -71,7 +71,7 @@ export interface AppState {
     setIsReverse: (isReverse: boolean) => void;
     setActiveHour: (hourNumber: number) => void;
     toggleEditor: () => void;
-    setEditorTab: (tab: 'sounds' | 'theme' | 'background' | 'theory' | 'help') => void;
+    setEditorTab: (tab: 'sounds' | 'theme' | 'theory' | 'help') => void;
     updatePresetParameter: (
         layer: 'hour' | 'minute' | 'second',
         param: keyof SynthPreset,
@@ -193,7 +193,7 @@ export const useStore = create<AppState>()(
                 set({ showEditor: !get().showEditor });
             },
 
-            setEditorTab: (tab: 'sounds' | 'theme' | 'background' | 'theory' | 'help') => {
+            setEditorTab: (tab: 'sounds' | 'theme' | 'theory' | 'help') => {
                 set({ editorTab: tab });
             },
 
@@ -282,6 +282,8 @@ export const useStore = create<AppState>()(
                 secondPreset: state.secondPreset,
                 mixer: state.mixer,
                 speed: state.speed,
+                isReverse: state.isReverse,
+                arpeggiator: state.arpeggiator,
             }),
         }
     )
