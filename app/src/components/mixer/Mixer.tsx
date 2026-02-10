@@ -16,12 +16,14 @@ export const Mixer = ({ activeLayer }: MixerProps) => {
 
     // Sync mixer state with audio engine (only when values actually change)
     useEffect(() => {
-        const channels: Array<'hour' | 'minute' | 'second'> = ['hour', 'minute', 'second'];
+        // Include arp channel for syncing
+        const channels: Array<'hour' | 'minute' | 'second' | 'arp'> = ['hour', 'minute', 'second', 'arp'];
 
-        // Skip if this is the first render (volumes already set by audioEngine initial state)
+        // On first render, still apply initial state to audio engine
+        // This is critical for persisted mute states (e.g., Arp muted before reload)
         if (prevMixerRef.current === null) {
-            prevMixerRef.current = mixer;
-            return;
+            console.log('[Mixer] Initial state loaded, applying to audio engine');
+            // Fall through to apply initial values
         }
 
         // Only update channels that actually changed
@@ -31,7 +33,22 @@ export const Mixer = ({ activeLayer }: MixerProps) => {
 
             if (!prev || prev.volume !== curr.volume || prev.muted !== curr.muted) {
                 const effectiveVolume = curr.muted ? -Infinity : curr.volume;
-                audioEngine.updateParameter(ch, 'volume', effectiveVolume);
+
+                // Log the change for debugging
+                if (prev?.muted !== curr.muted) {
+                    console.log(`[Mixer] ${ch.toUpperCase()} ${curr.muted ? '🔇 MUTED' : '🔊 UNMUTED'}`);
+                }
+                if (prev?.volume !== curr.volume) {
+                    console.log(`[Mixer] ${ch.toUpperCase()} volume: ${curr.volume}dB`);
+                }
+
+                // Arp uses a dedicated MonoSynth, NOT a standard channel
+                // Must use setArpVolume instead of updateParameter
+                if (ch === 'arp') {
+                    audioEngine.setArpVolume(effectiveVolume);
+                } else {
+                    audioEngine.setChannelVolume(ch, effectiveVolume);
+                }
             }
         });
 

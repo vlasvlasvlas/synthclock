@@ -29,6 +29,30 @@ export interface ChannelMixer {
     arp: { volume: number; muted: boolean };
 }
 
+// Visual effect types
+export type VisualEffect = 'particles' | 'ripples' | 'droplets' | 'waves' | 'none';
+export type ColorSource = 'theme' | 'pitchClass' | 'random' | 'custom';
+export type PositionMode = 'random' | 'center' | 'clockEdge';
+
+export interface VisualLayerSettings {
+    enabled: boolean;
+    effect: VisualEffect;
+    colorSource: ColorSource;
+    customColor: string;        // Hex color for 'custom' colorSource
+    intensity: number;          // 0-1
+    decayTime: number;          // seconds
+    positionMode: PositionMode;
+    sizeMultiplier: number;     // 0.5-3
+    opacity: number;            // 0-1
+}
+
+export interface VisualSettings {
+    hour: VisualLayerSettings;
+    minute: VisualLayerSettings;
+    second: VisualLayerSettings;
+    arp: VisualLayerSettings;
+}
+
 export interface AppState {
     // Theme
     currentThemeId: string;
@@ -43,6 +67,7 @@ export interface AppState {
     hourPreset: SynthPreset;
     minutePreset: SynthPreset;
     secondPreset: SynthPreset;
+    arpPreset: SynthPreset;
 
     // Channel Mixer
     mixer: ChannelMixer;
@@ -60,32 +85,41 @@ export interface AppState {
     // UI
     showEditor: boolean;
     editorTab: 'sounds' | 'theme' | 'theory' | 'help';
+    visualsEnabled: boolean;
+    isFullscreen: boolean;
+
+    // Visual Settings
+    visualSettings: VisualSettings;
 
     // Actions
     setTheme: (themeId: string) => void;
     setBackground: (settings: Partial<BackgroundSettings>) => void;
     setIsPlaying: (isPlaying: boolean) => void;
     setMasterVolume: (volume: number) => void;
-    setPreset: (layer: 'hour' | 'minute' | 'second', preset: SynthPreset) => void;
+    setPreset: (layer: 'hour' | 'minute' | 'second' | 'arp', preset: SynthPreset) => void;
     setSpeed: (speed: number) => void;
     setIsReverse: (isReverse: boolean) => void;
     setActiveHour: (hourNumber: number) => void;
     toggleEditor: () => void;
     setEditorTab: (tab: 'sounds' | 'theme' | 'theory' | 'help') => void;
     updatePresetParameter: (
-        layer: 'hour' | 'minute' | 'second',
+        layer: 'hour' | 'minute' | 'second' | 'arp',
         param: keyof SynthPreset,
         value: unknown
     ) => void;
     setChannelVolume: (channel: 'hour' | 'minute' | 'second' | 'arp', volume: number) => void;
     toggleChannelMute: (channel: 'hour' | 'minute' | 'second' | 'arp') => void;
     setArpeggiator: (settings: Partial<ArpeggiatorSettings>) => void;
+    setVisualsEnabled: (enabled: boolean) => void;
+    toggleFullscreen: () => void;
+    setVisualLayer: (layer: 'hour' | 'minute' | 'second' | 'arp', settings: Partial<VisualLayerSettings>) => void;
 }
 
 // Get default presets for each layer
 const defaultHourPreset = getPresetsByLayer('hour')[0];
 const defaultMinutePreset = getPresetsByLayer('minute')[0];
 const defaultSecondPreset = getPresetsByLayer('second')[0];
+const defaultArpPreset = getPresetsByLayer('second')[0]; // Use second presets for arp
 
 export const useStore = create<AppState>()(
     persist(
@@ -108,6 +142,7 @@ export const useStore = create<AppState>()(
             hourPreset: defaultHourPreset,
             minutePreset: defaultMinutePreset,
             secondPreset: defaultSecondPreset,
+            arpPreset: defaultArpPreset,
 
             // Mixer defaults (Sync with presets)
             mixer: {
@@ -130,6 +165,56 @@ export const useStore = create<AppState>()(
             // UI
             showEditor: false,
             editorTab: 'sounds',
+            visualsEnabled: true,
+            isFullscreen: false,
+
+            // Visual Settings - per-layer configuration
+            visualSettings: {
+                hour: {
+                    enabled: true,
+                    effect: 'ripples',
+                    colorSource: 'theme',
+                    customColor: '#FFD700',
+                    intensity: 1.0,
+                    decayTime: 4.0,
+                    positionMode: 'center',
+                    sizeMultiplier: 2.0,
+                    opacity: 1.0,
+                },
+                minute: {
+                    enabled: true,
+                    effect: 'ripples',
+                    colorSource: 'theme',
+                    customColor: '#00BFFF',
+                    intensity: 1.0,
+                    decayTime: 2.5,
+                    positionMode: 'center',
+                    sizeMultiplier: 1.5,
+                    opacity: 0.9,
+                },
+                second: {
+                    enabled: true,
+                    effect: 'particles',
+                    colorSource: 'theme',
+                    customColor: '#FF6B6B',
+                    intensity: 1.0,
+                    decayTime: 1.5,
+                    positionMode: 'random',
+                    sizeMultiplier: 1.0,
+                    opacity: 0.8,
+                },
+                arp: {
+                    enabled: true,
+                    effect: 'particles',
+                    colorSource: 'theme',
+                    customColor: '#A855F7',
+                    intensity: 0.8,
+                    decayTime: 0.8,
+                    positionMode: 'random',
+                    sizeMultiplier: 0.8,
+                    opacity: 0.7,
+                },
+            },
 
             // Actions
             setTheme: (themeId: string) => {
@@ -159,10 +244,14 @@ export const useStore = create<AppState>()(
                 set({ masterVolume: Math.max(-60, Math.min(0, volume)) });
             },
 
-            setPreset: (layer: 'hour' | 'minute' | 'second', preset: SynthPreset) => {
+            setPreset: (layer: 'hour' | 'minute' | 'second' | 'arp', preset: SynthPreset) => {
+                const presetKey = layer === 'hour' ? 'hourPreset'
+                    : layer === 'minute' ? 'minutePreset'
+                        : layer === 'second' ? 'secondPreset'
+                            : 'arpPreset';
                 set((state) => ({
                     ...state,
-                    [layer === 'hour' ? 'hourPreset' : layer === 'minute' ? 'minutePreset' : 'secondPreset']: preset,
+                    [presetKey]: preset,
                     // Also update mixer volume to match preset
                     mixer: {
                         ...state.mixer,
@@ -198,7 +287,7 @@ export const useStore = create<AppState>()(
             },
 
             updatePresetParameter: (
-                layer: 'hour' | 'minute' | 'second',
+                layer: 'hour' | 'minute' | 'second' | 'arp',
                 param: keyof SynthPreset,
                 value: unknown
             ) => {
@@ -206,10 +295,12 @@ export const useStore = create<AppState>()(
                     ? get().hourPreset
                     : layer === 'minute'
                         ? get().minutePreset
-                        : get().secondPreset;
+                        : layer === 'second'
+                            ? get().secondPreset
+                            : get().arpPreset;
 
-                // Get base name without "(Modified)" suffix to avoid repetition
-                const baseName = currentPreset.name.replace(/ \(Modified\)$/, '');
+                // Get base name without "(Modified)" suffix (handle multiple occurrences just in case)
+                const baseName = currentPreset.name.replace(/( \(Modified\))+$/, '');
                 const baseId = currentPreset.id.replace(/^CUSTOM_/, '');
 
                 const updatedPreset = {
@@ -229,6 +320,9 @@ export const useStore = create<AppState>()(
                     case 'second':
                         set({ secondPreset: updatedPreset });
                         break;
+                    case 'arp':
+                        set({ arpPreset: updatedPreset });
+                        break;
                 }
             },
 
@@ -244,32 +338,95 @@ export const useStore = create<AppState>()(
 
             toggleChannelMute: (channel: 'hour' | 'minute' | 'second' | 'arp') => {
                 const mixer = get().mixer;
+                const newMuted = !mixer[channel].muted;
+                console.log(`[Store] Toggled mute for channel: ${channel} -> ${newMuted ? 'MUTED' : 'UNMUTED'}`);
                 set({
                     mixer: {
                         ...mixer,
-                        [channel]: { ...mixer[channel], muted: !mixer[channel].muted }
+                        [channel]: { ...mixer[channel], muted: newMuted }
                     }
                 });
             },
 
             setArpeggiator: (settings: Partial<ArpeggiatorSettings>) => {
+                if (settings.enabled !== undefined) {
+                    console.log(`[Store] Arpeggiator ${settings.enabled ? 'ENABLED' : 'DISABLED'}`);
+                }
                 set({
                     arpeggiator: { ...get().arpeggiator, ...settings }
+                });
+            },
+
+            setVisualsEnabled: (enabled: boolean) => {
+                console.log(`[Store] Visuals globally ${enabled ? 'ENABLED' : 'DISABLED'}`);
+                set({ visualsEnabled: enabled });
+            },
+
+            toggleFullscreen: () => {
+                const isFullscreen = get().isFullscreen;
+                if (!isFullscreen) {
+                    document.documentElement.requestFullscreen?.();
+                } else {
+                    document.exitFullscreen?.();
+                }
+                set({ isFullscreen: !isFullscreen });
+            },
+
+            setVisualLayer: (layer: 'hour' | 'minute' | 'second' | 'arp', settings: Partial<VisualLayerSettings>) => {
+                console.log(`[Store] Visual layer '${layer}' updated:`, settings);
+                const visualSettings = get().visualSettings;
+                set({
+                    visualSettings: {
+                        ...visualSettings,
+                        [layer]: { ...visualSettings[layer], ...settings }
+                    }
                 });
             },
         }),
         {
             name: 'synthclock-storage',
-            version: 1,
+            version: 3,
             migrate: (persistedState: any, version: number) => {
                 if (version === 0) {
-                    // Migration from version 0 to 1: Add arp channel and settings
+                    // Migration from version 0 to 1
                     if (persistedState.mixer && !persistedState.mixer.arp) {
                         persistedState.mixer.arp = { volume: -10, muted: false };
                     }
                     if (!persistedState.arpeggiator) {
                         persistedState.arpeggiator = { ...defaultArpSettings };
                     }
+                }
+                if (version < 2) {
+                    // Migration to version 2: Force enable Arpeggiator (removed toggle)
+                    if (persistedState.arpeggiator) {
+                        persistedState.arpeggiator.enabled = true;
+                    }
+                }
+                if (version < 3) {
+                    // Migration to version 3: Reset visual settings with better defaults
+                    // Previous defaults were too subtle (low intensity/size/opacity)
+                    persistedState.visualSettings = {
+                        hour: {
+                            enabled: true, effect: 'ripples', colorSource: 'theme',
+                            customColor: '#FFD700', intensity: 1.0, decayTime: 4.0,
+                            positionMode: 'center', sizeMultiplier: 2.0, opacity: 1.0,
+                        },
+                        minute: {
+                            enabled: true, effect: 'ripples', colorSource: 'theme',
+                            customColor: '#00BFFF', intensity: 1.0, decayTime: 2.5,
+                            positionMode: 'center', sizeMultiplier: 1.5, opacity: 0.9,
+                        },
+                        second: {
+                            enabled: true, effect: 'particles', colorSource: 'theme',
+                            customColor: '#FF6B6B', intensity: 1.0, decayTime: 1.5,
+                            positionMode: 'random', sizeMultiplier: 1.0, opacity: 0.8,
+                        },
+                        arp: {
+                            enabled: true, effect: 'particles', colorSource: 'theme',
+                            customColor: '#A855F7', intensity: 0.8, decayTime: 0.8,
+                            positionMode: 'random', sizeMultiplier: 0.8, opacity: 0.7,
+                        },
+                    };
                 }
                 return persistedState as AppState;
             },
@@ -280,10 +437,13 @@ export const useStore = create<AppState>()(
                 hourPreset: state.hourPreset,
                 minutePreset: state.minutePreset,
                 secondPreset: state.secondPreset,
+                arpPreset: state.arpPreset,
                 mixer: state.mixer,
                 speed: state.speed,
                 isReverse: state.isReverse,
                 arpeggiator: state.arpeggiator,
+                visualsEnabled: state.visualsEnabled,
+                visualSettings: state.visualSettings,
             }),
         }
     )

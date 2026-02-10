@@ -5,7 +5,7 @@ import { useStore } from '../../hooks/useStore';
 import { getPresetsByLayer } from '../../core/audio/presets';
 import type { WaveformType, SynthesisType, FilterType } from '../../core/audio/presets';
 
-type Layer = 'hour' | 'minute' | 'second';
+type Layer = 'hour' | 'minute' | 'second' | 'arp';
 
 export const SoundEditor = () => {
     const [activeLayer, setActiveLayer] = useState<Layer>('hour');
@@ -13,6 +13,7 @@ export const SoundEditor = () => {
         hourPreset,
         minutePreset,
         secondPreset,
+        arpPreset,
         setPreset,
         updatePresetParameter,
         arpeggiator,
@@ -23,9 +24,13 @@ export const SoundEditor = () => {
         ? hourPreset
         : activeLayer === 'minute'
             ? minutePreset
-            : secondPreset;
+            : activeLayer === 'second'
+                ? secondPreset
+                : arpPreset;
 
-    const layerPresets = getPresetsByLayer(activeLayer);
+    // Use 'second' presets for arp layer
+    const layerForPresets = activeLayer === 'arp' ? 'second' : activeLayer;
+    const layerPresets = getPresetsByLayer(layerForPresets);
 
     const handlePresetChange = (direction: 'prev' | 'next') => {
         const currentIndex = layerPresets.findIndex(p => p.id === currentPreset.id);
@@ -48,18 +53,85 @@ export const SoundEditor = () => {
             <div className="mac-window-content">
                 {/* Layer Tabs */}
                 <div className="mac-tabs">
-                    {(['hour', 'minute', 'second'] as Layer[]).map(layer => (
+                    {(['hour', 'minute', 'second', 'arp'] as Layer[]).map(layer => (
                         <div
                             key={layer}
                             className={`mac-tab ${activeLayer === layer ? 'active' : ''}`}
                             onClick={() => setActiveLayer(layer)}
                         >
-                            {layer.charAt(0).toUpperCase() + layer.slice(1)}
+                            {layer === 'arp' ? 'Arp' : layer.charAt(0).toUpperCase() + layer.slice(1)}
                         </div>
                     ))}
                 </div>
 
                 <div className="mac-tab-content">
+                    {/* Arpeggiator Controls - Only show on Arp tab */}
+                    {activeLayer === 'arp' && (
+                        <div className="mac-panel">
+                            <div className="mac-panel-title">Arpeggiator</div>
+
+                            {/* Enable Toggle Removed - Use Mixer Mute instead */}
+
+                            {/* Pattern */}
+                            <div style={{ marginBottom: 8 }}>
+                                <span style={{ display: 'block', marginBottom: 4, fontSize: 11 }}>Pattern:</span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                    {(['up', 'down', 'upDown', 'downUp', 'random'] as const).map(p => (
+                                        <div
+                                            key={p}
+                                            className={`mac-radio ${arpeggiator.pattern === p ? 'selected' : ''}`}
+                                            onClick={() => setArpeggiator({ pattern: p })}
+                                            style={{ fontSize: 10, opacity: arpeggiator.enabled ? 1 : 0.5 }}
+                                        >
+                                            <span className="mac-radio-circle" />
+                                            <span>{p}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Rate */}
+                            <div className="mac-slider">
+                                <span className="mac-slider-label">Rate</span>
+                                <select
+                                    value={arpeggiator.rate}
+                                    onChange={(e) => setArpeggiator({ rate: e.target.value as '1n' | '2n' | '4n' | '8n' | '16n' })}
+                                    disabled={!arpeggiator.enabled}
+                                    style={{
+                                        fontFamily: 'inherit',
+                                        fontSize: 11,
+                                        padding: '2px 4px',
+                                        opacity: arpeggiator.enabled ? 1 : 0.5
+                                    }}
+                                >
+                                    <option value="1n">1/1 (whole)</option>
+                                    <option value="2n">1/2 (half)</option>
+                                    <option value="4n">1/4</option>
+                                    <option value="8n">1/8</option>
+                                    <option value="16n">1/16</option>
+                                </select>
+                            </div>
+
+                            {/* Glissando */}
+                            <div className="mac-slider">
+                                <span className="mac-slider-label">Glissando</span>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="2000"
+                                    step="10"
+                                    value={arpeggiator.glissando}
+                                    onChange={(e) => setArpeggiator({ glissando: parseFloat(e.target.value) })}
+                                    disabled={!arpeggiator.enabled}
+                                    style={{ opacity: arpeggiator.enabled ? 1 : 0.5 }}
+                                />
+                                <span className="mac-slider-value">{arpeggiator.glissando}ms</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="mac-divider" />
+
                     {/* Preset Selector */}
                     <div className="preset-selector">
                         <div className="preset-selector-arrows">
@@ -200,35 +272,35 @@ export const SoundEditor = () => {
                         </div>
 
                         <div className="mac-slider">
-                            <span className="mac-slider-label">Frequency</span>
+                            <span className="mac-slider-label">Cutoff</span>
                             <input
                                 type="range"
                                 min="20"
                                 max="20000"
                                 step="1"
-                                value={currentPreset.filter.frequency}
+                                value={currentPreset.filter?.frequency ?? 1000}
                                 onChange={(e) => updatePresetParameter(activeLayer, 'filter', {
                                     ...currentPreset.filter,
                                     frequency: parseFloat(e.target.value)
                                 })}
                             />
-                            <span className="mac-slider-value">{currentPreset.filter.frequency}Hz</span>
+                            <span className="mac-slider-value">{Math.round(currentPreset.filter?.frequency ?? 1000)}Hz</span>
                         </div>
 
                         <div className="mac-slider">
                             <span className="mac-slider-label">Resonance</span>
                             <input
                                 type="range"
-                                min="0"
+                                min="0.1"
                                 max="20"
                                 step="0.1"
-                                value={currentPreset.filter.resonance}
+                                value={currentPreset.filter?.resonance ?? 1}
                                 onChange={(e) => updatePresetParameter(activeLayer, 'filter', {
                                     ...currentPreset.filter,
                                     resonance: parseFloat(e.target.value)
                                 })}
                             />
-                            <span className="mac-slider-value">{currentPreset.filter.resonance.toFixed(1)}</span>
+                            <span className="mac-slider-value">{(currentPreset.filter?.resonance ?? 1).toFixed(1)}</span>
                         </div>
                     </div>
 
@@ -269,19 +341,35 @@ export const SoundEditor = () => {
                         </div>
 
                         <div className="mac-slider">
+                            <span className="mac-slider-label">Chorus</span>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                value={currentPreset.effects.chorus || 0}
+                                onChange={(e) => updatePresetParameter(activeLayer, 'effects', {
+                                    ...currentPreset.effects,
+                                    chorus: parseFloat(e.target.value)
+                                })}
+                            />
+                            <span className="mac-slider-value">{((currentPreset.effects.chorus || 0) * 100).toFixed(0)}%</span>
+                        </div>
+
+                        <div className="mac-slider">
                             <span className="mac-slider-label">Distortion</span>
                             <input
                                 type="range"
                                 min="0"
                                 max="1"
                                 step="0.01"
-                                value={currentPreset.effects.distortion}
+                                value={currentPreset.effects.distortion || 0}
                                 onChange={(e) => updatePresetParameter(activeLayer, 'effects', {
                                     ...currentPreset.effects,
                                     distortion: parseFloat(e.target.value)
                                 })}
                             />
-                            <span className="mac-slider-value">{(currentPreset.effects.distortion * 100).toFixed(0)}%</span>
+                            <span className="mac-slider-value">{((currentPreset.effects.distortion || 0) * 100).toFixed(0)}%</span>
                         </div>
 
                         <div className="mac-slider">
@@ -314,72 +402,6 @@ export const SoundEditor = () => {
                                 })}
                             />
                             <span className="mac-slider-value">{currentPreset.effects.noiseGate || -100}dB</span>
-                        </div>
-                    </div>
-
-                    {/* Arpeggiator Panel */}
-                    <div className="mac-panel">
-                        <div className="mac-panel-title">Arpeggiator</div>
-
-                        {/* Enable Toggle */}
-                        <div
-                            className={`mac-checkbox ${arpeggiator.enabled ? 'checked' : ''}`}
-                            onClick={() => setArpeggiator({ enabled: !arpeggiator.enabled })}
-                            style={{ marginBottom: 8, cursor: 'pointer' }}
-                        >
-                            <span className="mac-checkbox-box">{arpeggiator.enabled ? '☑' : '☐'}</span>
-                            <span>Enable Arpeggiator</span>
-                        </div>
-
-                        {/* Pattern */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                            {(['up', 'down', 'upDown', 'downUp', 'random'] as const).map(p => (
-                                <div
-                                    key={p}
-                                    className={`mac-radio ${arpeggiator.pattern === p ? 'selected' : ''}`}
-                                    onClick={() => setArpeggiator({ pattern: p })}
-                                    style={{ fontSize: 10, opacity: arpeggiator.enabled ? 1 : 0.5 }}
-                                >
-                                    <span className="mac-radio-circle" />
-                                    <span>{p}</span>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Rate */}
-                        <div className="mac-slider">
-                            <span className="mac-slider-label">Rate</span>
-                            <select
-                                value={arpeggiator.rate}
-                                onChange={(e) => setArpeggiator({ rate: e.target.value as '4n' | '8n' | '16n' })}
-                                disabled={!arpeggiator.enabled}
-                                style={{
-                                    fontFamily: 'inherit',
-                                    fontSize: 11,
-                                    padding: '2px 4px',
-                                    opacity: arpeggiator.enabled ? 1 : 0.5
-                                }}
-                            >
-                                <option value="4n">1/4</option>
-                                <option value="8n">1/8</option>
-                                <option value="16n">1/16</option>
-                            </select>
-                        </div>
-
-                        {/* Glissando */}
-                        <div className="mac-slider">
-                            <span className="mac-slider-label">Glissando</span>
-                            <input
-                                type="range"
-                                min="0"
-                                max="2000"
-                                step="10"
-                                value={arpeggiator.glissando}
-                                onChange={(e) => setArpeggiator({ glissando: parseFloat(e.target.value) })}
-                                disabled={!arpeggiator.enabled}
-                                style={{ opacity: arpeggiator.enabled ? 1 : 0.5 }}
-                            />
-                            <span className="mac-slider-value">{arpeggiator.glissando}ms</span>
                         </div>
                     </div>
                 </div>

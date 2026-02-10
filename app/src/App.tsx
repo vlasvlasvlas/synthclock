@@ -1,6 +1,6 @@
 // Main App Component
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import './index.css';
 import { ClockDisplay } from './components/clock/ClockDisplay';
 import { SoundEditor } from './components/editors/SoundEditor';
@@ -11,6 +11,8 @@ import { audioEngine } from './core/audio/AudioEngine';
 import { timeDilator } from './core/time/TimeDilator';
 import { mapTimeToToneClock, pitchClassToNote, TONE_CLOCK_HOURS } from './core/theory/ToneClock';
 import { arpeggiator } from './core/audio/Arpeggiator';
+import { VisualCanvas } from './components/visuals/VisualCanvas';
+import { visualEngine } from './core/visuals/VisualEngine';
 import * as Tone from 'tone';
 
 function App() {
@@ -30,10 +32,13 @@ function App() {
     hourPreset,
     minutePreset,
     secondPreset,
+    arpPreset,
+    mixer,
     background,
     arpeggiator: arpSettings,
     isReverse,
     setIsReverse,
+    visualSettings,
   } = useStore();
 
   // Calculate BPM from speed (base 60 BPM at 1x speed)
@@ -43,16 +48,27 @@ function App() {
   // Track which layer is currently active (for visual feedback)
   const [activeLayer, setActiveLayer] = useState<'hour' | 'minute' | 'second' | null>(null);
 
-  // Update audio channels when presets change (without recreating = no sound cut)
-  useEffect(() => {
-    if (audioStarted) {
-      // Use updateSynthParams to change parameters without recreating channels
-      // This keeps the drone and other sounds playing smoothly
-      audioEngine.updateSynthParams('hour', hourPreset);
-      audioEngine.updateSynthParams('minute', minutePreset);
-      audioEngine.updateSynthParams('second', secondPreset);
+  // Helper to get visual color based on layer settings
+  const getVisualColor = (
+    layer: 'hour' | 'minute' | 'second' | 'arp',
+    themeColor: string
+  ): string => {
+    const settings = visualSettings[layer];
+    switch (settings.colorSource) {
+      case 'custom':
+        return settings.customColor || themeColor;
+      case 'random':
+        return `hsl(${Math.random() * 360}, 70%, 50%)`;
+      case 'pitchClass':
+        // For pitch class, we'd need the note. If not available here, fallback to theme
+        return themeColor;
+      case 'theme':
+      default:
+        return themeColor;
     }
-  }, [hourPreset, minutePreset, secondPreset, audioStarted]);
+  };
+
+
 
   // Start the hour drone (continuous pad sound)
   const startHourDrone = () => {
@@ -84,6 +100,9 @@ function App() {
         // Visual feedback: flash second layer
         setActiveLayer('second');
         setTimeout(() => setActiveLayer(null), 100);
+        // Trigger visual particles
+        const secondColor = getVisualColor('second', theme.colors.secondHand);
+        visualEngine.triggerSecond(event.value, note, secondColor, visualSettings.second);
       }
 
       if (event.type === 'minute') {
@@ -93,12 +112,18 @@ function App() {
         // Visual feedback: flash minute layer (longer since 2n note)
         setActiveLayer('minute');
         setTimeout(() => setActiveLayer(null), 300);
+        // Trigger visual particles
+        const minuteColor = getVisualColor('minute', theme.colors.minuteHand);
+        visualEngine.triggerMinute(event.value, note, minuteColor, visualSettings.minute);
       }
 
       if (event.type === 'hour') {
         // Hour changed - update the drone with new trichord
         // Visual feedback: flash hour layer (sustained feedback)
         setActiveLayer('hour');
+        // Trigger visual particles
+        const hourColor = getVisualColor('hour', theme.colors.hourHand);
+        visualEngine.triggerHour(time.hours, hourColor, visualSettings.hour);
         stopHourDrone();
         setTimeout(() => {
           startHourDrone();
@@ -131,30 +156,44 @@ function App() {
     audioEngine.setMasterVolume(masterVolume);
   }, [masterVolume]);
 
+  // Refs for callback access to prevent re-running effects
+  const visualSettingsRef = useRef(visualSettings);
+  const themeRef = useRef(theme);
+
+  useEffect(() => {
+    visualSettingsRef.current = visualSettings;
+  }, [visualSettings]);
+
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
+
   // Setup arpeggiator callback to play notes through audio engine
+  // This should only run ONCE to set the callback. No cleanup needed for the callback itself.
   useEffect(() => {
     arpeggiator.setCallback((note) => {
       if (audioStarted && isPlaying) {
         // Use dedicated arpeggiator synth with portamento
         audioEngine.playArpNote(note, '16n');
+        // Trigger visual effect for arp
+        const currentTheme = themeRef.current;
+        const currentVisualSettings = visualSettingsRef.current;
+
+        const arpColor = getVisualColor('arp', currentTheme.colors.accent);
+        visualEngine.triggerArpNote(note, arpColor, currentVisualSettings.arp);
       }
     });
-
-    return () => {
-      arpeggiator.dispose();
-    };
+    // NO cleanup here -- don't stop the arp just because this effect re-runs.
+    // The arp is stopped explicitly when isPlaying becomes false (in handlePlay).
   }, [audioStarted, isPlaying]);
 
-  // Sync arpeggiator settings from store
+  // Update arpeggiator notes when time changes AND start/stop based on playback
   useEffect(() => {
-    arpeggiator.updateSettings(arpSettings);
-    // Update portamento on audio engine (convert ms to seconds)
-    audioEngine.setArpPortamento(arpSettings.glissando / 1000);
-  }, [arpSettings]);
-
-  // Update arpeggiator notes when time changes
-  useEffect(() => {
-    if (!isPlaying || !audioStarted) return;
+    if (!isPlaying || !audioStarted) {
+      // If we're not playing, stop the arp
+      arpeggiator.stop();
+      return;
+    }
 
     const updateArpNotes = () => {
       const time = timeDilator.getTime();
@@ -163,8 +202,9 @@ function App() {
       arpeggiator.setNotes(notes);
     };
 
-    // Initial update
+    // Set notes first, THEN start
     updateArpNotes();
+    arpeggiator.start();
 
     // Update on minute changes (when trichord might change)
     const handleTimeEvent = (event: { type: string }) => {
@@ -177,17 +217,137 @@ function App() {
 
     return () => {
       timeDilator.unsubscribe('arpeggiator-notes');
+      arpeggiator.stop();
     };
   }, [isPlaying, audioStarted]);
 
-  // Sync arpeggiator volume
-  const { mixer } = useStore();
+  // Sync arpeggiator settings from store (pattern, rate, glissando changes)
   useEffect(() => {
-    if (mixer.arp) {
-      const volume = mixer.arp.muted ? -Infinity : mixer.arp.volume;
-      audioEngine.setArpVolume(volume);
+    // Force enable to true since we removed the toggle
+    arpeggiator.updateSettings({ ...arpSettings, enabled: true });
+    // Update portamento on audio engine (convert ms to seconds)
+    audioEngine.setArpPortamento(arpSettings.glissando / 1000);
+  }, [arpSettings]);
+
+  // Watch visual layer enable/disable and clear visuals when ALL are off or ANY changes
+  const prevVisualSettings = useRef(visualSettings);
+  useEffect(() => {
+    const prev = prevVisualSettings.current;
+    const layers: Array<'hour' | 'minute' | 'second' | 'arp'> = ['hour', 'minute', 'second', 'arp'];
+
+    // Check if any layer was just disabled
+    for (const layer of layers) {
+      if (prev[layer].enabled && !visualSettings[layer].enabled) {
+        // Layer was just disabled - clear all visual effects for immediate response
+        visualEngine.clearAll();
+        break;
+      }
     }
-  }, [mixer.arp]);
+    prevVisualSettings.current = visualSettings;
+  }, [visualSettings]);
+
+  // NOTE: Arp volume is handled by the Mixer component via audioEngine.setArpVolume()
+
+  // Sync Mixer Volume/Mute for other channels
+  useEffect(() => {
+    if (!mixer.hour) return;
+    const vol = mixer.hour.muted ? -Infinity : mixer.hour.volume;
+    audioEngine.setChannelVolume('hour', vol);
+  }, [mixer.hour]);
+
+  useEffect(() => {
+    if (!mixer.minute) return;
+    const vol = mixer.minute.muted ? -Infinity : mixer.minute.volume;
+    audioEngine.setChannelVolume('minute', vol);
+  }, [mixer.minute]);
+
+  useEffect(() => {
+    if (!mixer.second) return;
+    const vol = mixer.second.muted ? -Infinity : mixer.second.volume;
+    audioEngine.setChannelVolume('second', vol);
+  }, [mixer.second]);
+
+  // Sync Audio Presets (Smart Update: Params vs Full Recreate)
+  // We use refs to track previous IDs to distinguish between "tweak" and "swap"
+  const prevPresets = useRef({
+    hour: hourPreset.id,
+    minute: minutePreset.id,
+    second: secondPreset.id
+  });
+
+  // Sync Hour Preset
+  useEffect(() => {
+    if (!audioStarted) return;
+
+    // Check if ID changed (Swap) or just params (Tweak)
+    // Note: The store adds "CUSTOM_" prefix but base ID remains if just tweaking
+    // We compare exact ID strings. If user selects new preset, ID changes.
+    // If user tweaks, ID stays "CUSTOM_..."
+
+    // Actually, createChannel is safer for swaps, updateSynthParams for tweaks
+    // If only params changed, update withoutglitch
+
+    if (hourPreset.id !== prevPresets.current.hour) {
+      // ID changed - likely a new preset selected
+      audioEngine.createChannel('hour', hourPreset);
+      prevPresets.current.hour = hourPreset.id;
+    } else {
+      // ID same - likely a parameter tweak
+      audioEngine.updateSynthParams('hour', hourPreset);
+    }
+
+    // CRITICAL: Restart drone if playing, as synth update might kill voices
+    if (isPlaying) {
+      // Debounce slightly to avoid rapid re-triggering during sliding
+      // But for instant feedback, we might want to just re-trigger
+      // Actually, if we just re-trigger, it might sound glitchy on sliders. 
+      // Better to check if voices are active? 
+      // Easiest fix: just call startsHourDrone() which handles the chord release/attack
+      // We'll use a small timeout to let the synth settle
+      // stopHourDrone(); // Optional: force stop first
+      // startHourDrone();
+
+      // BETTER APPROACH: Only restart if it's the HOUR channel.
+      // We are inside the hourPreset effect, so yes.
+      // Let's debounce this restart to avoid chaos while dragging sliders
+      const restartDrone = () => {
+        stopHourDrone();
+        setTimeout(() => startHourDrone(), 50);
+      };
+      restartDrone();
+    }
+  }, [hourPreset, audioStarted]);
+
+  // Sync Minute Preset
+  useEffect(() => {
+    if (!audioStarted) return;
+    if (minutePreset.id !== prevPresets.current.minute) {
+      audioEngine.createChannel('minute', minutePreset);
+      prevPresets.current.minute = minutePreset.id;
+    } else {
+      audioEngine.updateSynthParams('minute', minutePreset);
+    }
+  }, [minutePreset, audioStarted]);
+
+  // Sync Second Preset
+  useEffect(() => {
+    if (!audioStarted) return;
+    if (secondPreset.id !== prevPresets.current.second) {
+      audioEngine.createChannel('second', secondPreset);
+      prevPresets.current.second = secondPreset.id;
+    } else {
+      audioEngine.updateSynthParams('second', secondPreset);
+    }
+  }, [secondPreset, audioStarted]);
+
+  // Sync Arp Preset
+  useEffect(() => {
+    if (!audioStarted) return;
+    // Arp uses a dedicated synth, so we always just update params
+    // It doesn't support full "presets" in the same channel sense yet,
+    // but this ensures the sound editor changes apply to the Arp Synth
+    audioEngine.updateArpParams(arpPreset);
+  }, [arpPreset, audioStarted]);
 
   // Handle play button
   const handlePlay = async () => {
@@ -227,6 +387,9 @@ function App() {
         animation: background.animated ? 'bgPulse 3s ease-in-out infinite' : 'none',
       }}
     >
+      {/* Visual Canvas Layer */}
+      <VisualCanvas />
+
       {/* Toolbar */}
       <div className="toolbar">
         <button

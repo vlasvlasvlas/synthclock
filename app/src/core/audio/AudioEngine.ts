@@ -26,8 +26,13 @@ class AudioEngine {
 
     // Dedicated MonoSynth for arpeggiator with portamento
     private arpSynth: Tone.MonoSynth | null = null;
+    private arpFilter: Tone.Filter | null = null;
+    private arpDelay: Tone.FeedbackDelay | null = null;
+    private arpReverb: Tone.Reverb | null = null;
     private arpVolume: Tone.Volume | null = null;
+    private arpVolumeValue: number = -10; // Cache volume to handle lazy initialization
     private arpPortamento = 0;
+    private arpCachedPreset: SynthPreset | null = null; // Cache preset for lazy init
 
     constructor() {
         this.masterVolume = new Tone.Volume(-6).toDestination();
@@ -276,9 +281,14 @@ class AudioEngine {
 
     // Set arpeggiator volume
     setArpVolume(volumeDb: number): void {
+        // Always update the cached value
+        this.arpVolumeValue = volumeDb <= -60 ? -Infinity : Math.max(-60, Math.min(6, volumeDb));
+
         if (this.arpVolume) {
-            this.arpVolume.volume.value = volumeDb <= -60 ? -Infinity : Math.max(-60, Math.min(6, volumeDb));
-            this.log(`Arp volume set to ${volumeDb}dB`);
+            this.arpVolume.volume.value = this.arpVolumeValue;
+            this.log(`Arp volume set to ${this.arpVolumeValue}dB`);
+        } else {
+            this.log(`Arp volume cached to ${this.arpVolumeValue}dB (node not ready)`);
         }
     }
 
@@ -286,19 +296,26 @@ class AudioEngine {
     playArpNote(note: string, duration: string = '16n'): void {
         if (!this.isStarted) return;
 
-        // Create arpSynth on first use
+        // Create arpSynth + effects chain on first use (lazy init)
         if (!this.arpSynth) {
-            // Create volume node connected to master
-            this.arpVolume = new Tone.Volume(-10).connect(this.masterVolume);
+            // Build chain: MonoSynth → Filter → Delay → Reverb → Volume → Master
+            this.arpVolume = new Tone.Volume(this.arpVolumeValue).connect(this.masterVolume);
+            this.arpReverb = new Tone.Reverb({ decay: 1.5, wet: 0 }).connect(this.arpVolume);
+            this.arpDelay = new Tone.FeedbackDelay({ delayTime: '8n', feedback: 0.3, wet: 0 }).connect(this.arpReverb);
+            this.arpFilter = new Tone.Filter({ frequency: 2000, type: 'lowpass', Q: 1 }).connect(this.arpDelay);
 
-            // Create synth connected to volume node
             this.arpSynth = new Tone.MonoSynth({
                 oscillator: { type: 'sawtooth' },
                 envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 },
                 portamento: this.arpPortamento,
-            }).connect(this.arpVolume);
+            }).connect(this.arpFilter);
 
-            this.log('Arp MonoSynth created');
+            this.log(`Arp MonoSynth created with full FX chain, volume ${this.arpVolumeValue}dB`);
+
+            // Apply cached preset if we have one
+            if (this.arpCachedPreset) {
+                this.updateArpParams(this.arpCachedPreset);
+            }
         }
 
         try {
@@ -469,15 +486,78 @@ class AudioEngine {
             // Update feedback for more/less echoes
             channel.delay.feedback.value = Math.max(0, Math.min(0.9, preset.effects?.delayFeedback ?? 0.6));
 
-            // Update volume - DEPRECATED: Volume is now controlled by the Mixer
-            // channel.volume.volume.value = preset.volume || -12;
-
             // Update stored preset reference
             channel.preset = preset;
 
             this.log(`Updated synth params for ${channelId} without recreation`);
         } catch (error) {
             this.logError(`Failed to update synth params for ${channelId}`, error);
+        }
+    }
+
+    // Update volume for a specific channel (used for Mixer)
+    setChannelVolume(channelId: string, volume: number): void {
+        const channel = this.channels.get(channelId);
+        // Special case for Arp which is handled separately, but let's support standard channels here
+        if (!channel) return;
+
+        try {
+            // If volume is -Infinity, we can mute. Tone.Volume handles -Infinity as mute.
+            // Ramp for smooth transition
+            channel.volume.volume.rampTo(volume, 0.1);
+            this.log(`Set ${channelId} volume to ${volume}`);
+        } catch (error) {
+            this.logError(`Failed to set volume for ${channelId}`, error);
+        }
+    }
+
+    // Update Arp Synth parameters from preset
+    updateArpParams(preset: SynthPreset): void {
+        // Always cache the preset for lazy init
+        this.arpCachedPreset = preset;
+
+        if (!this.arpSynth) {
+            this.log('Arp params cached (synth not created yet)');
+            return;
+        }
+
+        try {
+            // Update oscillator type
+            const oscillatorType = this.mapWaveform(preset.waveform);
+            this.arpSynth.set({
+                oscillator: { type: oscillatorType },
+            });
+
+            // Update envelope
+            this.arpSynth.set({
+                envelope: {
+                    attack: preset.envelope.attack,
+                    decay: preset.envelope.decay,
+                    sustain: preset.envelope.sustain,
+                    release: preset.envelope.release,
+                },
+            });
+
+            // Update external filter node (our arpFilter, not MonoSynth's internal)
+            if (this.arpFilter) {
+                this.arpFilter.frequency.value = preset.filter?.frequency || 2000;
+                this.arpFilter.Q.value = preset.filter?.resonance || 1;
+                if (preset.filter?.type) {
+                    this.arpFilter.type = preset.filter.type;
+                }
+            }
+
+            // Update effects
+            if (this.arpReverb) {
+                this.arpReverb.wet.value = Math.max(0, Math.min(1, preset.effects?.reverb || 0));
+            }
+            if (this.arpDelay) {
+                this.arpDelay.wet.value = Math.max(0, Math.min(1, preset.effects?.delay || 0));
+            }
+
+            this.log('Updated Arp synth params + FX');
+        } catch (error) {
+            this.logError('Failed to update Arp params', error);
         }
     }
 

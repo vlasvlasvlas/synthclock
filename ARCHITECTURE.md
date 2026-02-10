@@ -5,26 +5,29 @@ This document explains the software architecture and main components of SynthClo
 ## High-Level Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        React Application                        │
-├─────────────────────────────────────────────────────────────────┤
-│  UI Components                                                  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
-│  │ClockDisp-│ │SoundEdit-│ │ThemeSele-│ │Mixer             │   │
-│  │lay       │ │or        │ │ctor      │ │                  │   │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────────┬─────────┘   │
-│       │            │            │                │              │
-├───────┴────────────┴────────────┴────────────────┴──────────────┤
-│                     Zustand Store (useStore)                     │
-│  - Theme, Background, Presets, Mixer, PlayState                 │
-├──────────────────────────────────────────────────────────────────┤
-│  Core Modules                                                    │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐             │
-│  │ AudioEngine  │ │ TimeDilator  │ │  ToneClock   │             │
-│  │ (Tone.js)    │ │ (Virtual     │ │  (Music      │             │
-│  │              │ │  Clock)      │ │   Theory)    │             │
-│  └──────────────┘ └──────────────┘ └──────────────┘             │
-└──────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                             React Application                               │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  UI Components                                                               │
+│  ┌────────────┐ ┌────────────┐ ┌──────────────┐ ┌────────┐ ┌─────────────┐ │
+│  │ClockDisplay│ │SoundEditor │ │VisualEditor  │ │ Mixer  │ │ThemeSelector│ │
+│  └─────┬──────┘ └─────┬──────┘ └──────┬───────┘ └───┬────┘ └──────┬──────┘ │
+│        │              │               │              │             │         │
+├────────┴──────────────┴───────────────┴──────────────┴─────────────┴─────────┤
+│                         Zustand Store (useStore)                             │
+│  Theme · Background · Presets · Mixer · Arp · VisualSettings · PlayState    │
+├──────────────────────────────────────────────────────────────────────────────┤
+│  Core Modules                                                                │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐   │
+│  │ AudioEngine  │ │ TimeDilator  │ │  ToneClock   │ │  VisualEngine    │   │
+│  │ (Tone.js)    │ │ (Virtual     │ │ (Music       │ │  (Canvas 2D)     │   │
+│  │              │ │  Clock)      │ │  Theory)     │ │                  │   │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘   │
+│  ┌──────────────┐                                                           │
+│  │ Arpeggiator  │                                                           │
+│  │ (Tone.Pattern)│                                                          │
+│  └──────────────┘                                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Modules
@@ -33,35 +36,62 @@ This document explains the software architecture and main components of SynthClo
 
 **Purpose**: Manages all audio synthesis using Tone.js.
 
-**Key Classes & Methods**:
+**Key Methods**:
 
 | Method | Description |
 |--------|-------------|
 | `start()` | Initializes audio context (requires user interaction) |
-| `createChannel(id, preset)` | Creates synth with effects chain |
-| `playNote(id, note, duration)` | Plays single note |
-| `playChord(id, notes, duration)` | Plays multiple notes |
-| `triggerAttack/Release(id)` | For sustained drones |
-| `updateParameter(id, param, value)` | Real-time parameter changes |
+| `createChannel(id, preset)` | Creates synth with full effects chain |
+| `playNote(id, note, duration)` | Plays single note on a channel |
+| `playChord(id, notes, duration)` | Plays multiple notes simultaneously |
+| `playArpNote(note, duration)` | Plays note on dedicated arp MonoSynth |
+| `triggerAttack/Release(id)` | For sustained drones (hour layer) |
+| `updateSynthParams(id, preset)` | Real-time parameter changes |
+| `updateArpParams(preset)` | Updates arp synth + FX from preset |
 | `setMasterVolume(db)` | Controls master output |
+| `setChannelVolume(id, db)` | Per-channel volume control |
+| `setArpPortamento(seconds)` | Glissando effect for arp |
 
-**Effects Chain**:
+**Standard Effects Chain** (per channel):
 ```
-Synth → Filter → Tremolo → Delay → Reverb → Gate → Volume → Master
+PolySynth → Filter → Tremolo → Delay → Reverb → Gate → Volume → Master
+```
+
+**Arpeggiator Effects Chain** (dedicated):
+```
+MonoSynth → Filter → FeedbackDelay → Reverb → Volume → Master
 ```
 
 **Singleton**: `audioEngine` is exported as a single instance.
 
 ---
 
-### 2. TimeDilator (`core/time/TimeDilator.ts`)
+### 2. Arpeggiator (`core/audio/Arpeggiator.ts`)
+
+**Purpose**: Generates rhythmic patterns based on the current Tone Clock trichord.
+
+**Key Features**:
+- **Patterns**: Up, Down, UpDown, DownUp, Random
+- **Rates**: 1n (whole), 2n (half), 4n, 8n, 16n
+- **Glissando**: Portamento effect between notes (0–500ms)
+- **Sync**: Updates notes automatically when clock changes (minute/hour)
+
+**Integration**:
+- Uses `Tone.Pattern` for sequencing
+- Triggers `AudioEngine.playArpNote()` via callback
+- Settings managed via global store (`arpeggiator`)
+
+---
+
+### 3. TimeDilator (`core/time/TimeDilator.ts`)
 
 **Purpose**: Virtual clock with speed control. Emits events for UI and audio sync.
 
 **Key Features**:
 - Speed multiplier (0.1x to 10x)
+- Reverse mode (time moves backward)
 - Emits `'second'`, `'minute'`, `'hour'` events
-- Uses `setInterval` (not requestAnimationFrame) so audio continues in background
+- Uses `setInterval` (not requestAnimationFrame) so audio continues in background tabs
 
 **Key Methods**:
 
@@ -70,6 +100,7 @@ Synth → Filter → Tremolo → Delay → Reverb → Gate → Volume → Master
 | `start()` | Begins clock from real time |
 | `stop()` | Pauses clock |
 | `setSpeed(n)` | Speed multiplier (1.0 = real-time) |
+| `setReverse(bool)` | Toggle reverse time direction |
 | `getTime()` | Returns current virtual time |
 | `getAngles()` | Returns hand angles in radians |
 | `subscribe(id, callback)` | Listen to time events |
@@ -78,7 +109,7 @@ Synth → Filter → Tremolo → Delay → Reverb → Gate → Volume → Master
 
 ---
 
-### 3. ToneClock (`core/theory/ToneClock.ts`)
+### 4. ToneClock (`core/theory/ToneClock.ts`)
 
 **Purpose**: Implements Peter Schat's Tone Clock music theory.
 
@@ -106,40 +137,51 @@ Second hand → Cycles through 3 notes of trichord
 
 ---
 
-### 4. Themes (`core/visuals/themes.ts`)
+### 5. VisualEngine (`core/visuals/VisualEngine.ts`)
 
-**Purpose**: Visual theme definitions.
+**Purpose**: Manages the canvas rendering pipeline for audio-reactive visual effects.
 
-**Theme Structure**:
-```typescript
-interface Theme {
-  id: string;
-  name: string;
-  colors: ThemeColors;      // 11 color properties
-  characters: ThemeCharacters; // ASCII art for UI
-  fontFamily: string;
-  fontSize: number;
-}
+**Key Features**:
+- Singleton architecture with pluggable renderers
+- `requestAnimationFrame` render loop
+- Receives audio event triggers from `App.tsx`
+- Per-layer settings for effect type, color, position, intensity
+
+**Architecture**:
+```
+App.tsx audio events
+    ↓
+VisualEngine.triggerSecond/Minute/Hour/ArpNote()
+    ↓ checks settings.enabled
+MultiRenderer.onSecond/onMinute/onHour/onArpNote()
+    ↓ dispatches by settings.effect
+ParticleRenderer / RippleRenderer / DropletRenderer / WaveRenderer
+    ↓ spawns visual elements
+MultiRenderer.render() — called every frame
+    ↓ clears canvas
+    ↓ renders all sub-renderers
+Canvas 2D output
 ```
 
-See [ADDING_THEMES.md](./ADDING_THEMES.md) for customization guide.
+**Available Renderers**:
+
+| Renderer | File | Description |
+|----------|------|-------------|
+| Particles | `ParticleRenderer.ts` | Physics-based particles with trails and glow |
+| Ripples | `RippleRenderer.ts` | Expanding concentric circles with fade |
+| Droplets | `DropletRenderer.ts` | Gravity-affected falling droplets |
+| Waves | `WaveRenderer.ts` | Horizontal waves with oscillation |
 
 ---
 
-### 5. Arpeggiator (`core/audio/Arpeggiator.ts`)
+### 6. Themes (`core/visuals/themes.ts`)
 
-**Purpose**: Generates rhythmic patterns based on the current Tone Clock trichord.
+**Purpose**: Visual theme definitions.
 
-**Key Features**:
-- **Patterns**: Up, Down, UpDown, DownUp, Random
-- **Rates**: 1n, 2n, 4n, 8n, 16n
-- **Glissando**: Portamento effect between notes (0-500ms)
-- **Sync**: Updates notes automatically when clock changes (minute/hour)
+**Included Themes**:
+- Classic Mac, ANSI BBS, Windows 3.1, Terminal Green
 
-**Integration**:
-- Uses `Tone.Pattern` for sequencing
-- Triggers `AudioEngine.playArpNote()` which uses a dedicated MonoSynth
-- Settings managed via global store (`arpeggiator`)
+See [ADDING_THEMES.md](./ADDING_THEMES.md) for customization guide.
 
 ---
 
@@ -157,18 +199,43 @@ Uses **Zustand** with `persist` middleware for localStorage.
   isPlaying: boolean,
   masterVolume: number,
   speed: number,
+  isReverse: boolean,
   hourPreset: SynthPreset,
   minutePreset: SynthPreset,
   secondPreset: SynthPreset,
-  mixer: { hour: {...}, minute: {...}, second: {...}, arp: {...} },
+  arpPreset: SynthPreset,
+  mixer: { hour, minute, second, arp },  // { volume, muted }
   arpeggiator: { enabled, pattern, rate, glissando },
+  visualsEnabled: boolean,
+  visualSettings: {
+    hour: VisualLayerSettings,
+    minute: VisualLayerSettings,
+    second: VisualLayerSettings,
+    arp: VisualLayerSettings,
+  },
   activeHour: ToneClockHour,
   showEditor: boolean,
   editorTab: 'sounds' | 'theme' | 'theory' | 'help',
 }
 ```
 
-**Persisted Keys**: theme, presets, background, mixer, speed.
+**VisualLayerSettings**:
+```typescript
+{
+  enabled: boolean,
+  effect: 'particles' | 'ripples' | 'droplets' | 'waves' | 'none',
+  colorSource: 'theme' | 'pitchClass' | 'random' | 'custom',
+  customColor: string,
+  intensity: number,        // 0-1
+  decayTime: number,        // seconds
+  positionMode: 'random' | 'center' | 'clockEdge',
+  sizeMultiplier: number,   // 0.5-3
+  opacity: number,          // 0-1
+}
+```
+
+**Persisted**: theme, presets, mixer, speed, arp settings, visual settings.
+**Versioned**: Storage migrations handle upgrades between versions.
 
 ---
 
@@ -177,18 +244,27 @@ Uses **Zustand** with `persist` middleware for localStorage.
 ```
 App.tsx
 ├── Toolbar
-│   ├── BPM Slider (speed control)
-│   ├── Volume Slider (master)
-│   ├── Play Button
-│   └── Editor Toggle
+│   ├── Play/Stop Button
+│   ├── REV Checkbox (reverse mode)
+│   ├── Speed Slider + BPM display
+│   ├── Volume Slider
+│   ├── Editor Toggle (Show/Hide)
+│   └── GitHub Link
+├── VisualCanvas (fixed, full-screen, z-index: 0)
 ├── ClockDisplay
-│   ├── Clock Face (hands, numbers)
-│   └── ToneClockInfo (current hour, trichord)
+│   ├── Clock Face (analog with hands)
+│   ├── Digital Time (HH:MM:SS)
+│   ├── Date Display (D Month YYYY)
+│   └── ToneClockInfo (current hour, trichord, IPF)
 ├── EditorPanel (conditional)
 │   ├── Tabs: Sounds | Theme | Theory | Help
-│   ├── Mixer (per-channel volume/mute)
-│   ├── SoundEditor (waveform, envelope, effects)
-│   ├── ThemeSelector (colors, patterns)
+│   ├── SoundEditor (per-layer: waveform, envelope, filter, effects)
+│   │   └── Arpeggiator Controls (pattern, rate, glissando)
+│   ├── ThemeSelector
+│   │   ├── Visuals Sub-tab (per-layer: effect, color, intensity, etc.)
+│   │   ├── Theme Sub-tab (theme picker)
+│   │   └── Background Sub-tab (color, pattern, opacity)
+│   ├── Mixer (per-channel: volume slider + mute)
 │   ├── TheoryPanel (Tone Clock explanation)
 │   └── HelpPanel (reset, guide)
 └── StatusBar
@@ -198,25 +274,40 @@ App.tsx
 
 ## Data Flow
 
+### Audio Event Flow
 ```
 1. TimeDilator.start()
-   ↓ emits 'second' event
+   ↓ emits 'second' / 'minute' / 'hour' events
 2. App.tsx useEffect receives event
-   ↓ calls ToneClock.getCurrentNote()
-3. Gets note based on current time
+   ↓ calls ToneClock.mapTimeToToneClock()
+3. Gets note/chord based on current time
    ↓
 4. audioEngine.playNote('second', note)
    ↓
-5. Tone.js synthesizes sound
+5. Tone.js synthesizes sound through effects chain
+   ↓
+6. visualEngine.triggerSecond(value, note, color, settings)
+   ↓
+7. Canvas renders particles/ripples/waves
 ```
 
-**On Preset Change**:
+### Arpeggiator Flow
+```
+1. Arpeggiator.start() → Tone.Pattern sequences notes
+   ↓ callback fires per pattern step
+2. audioEngine.playArpNote(note, '16n')
+   ↓ MonoSynth → Filter → Delay → Reverb → Volume → Master
+3. visualEngine.triggerArpNote(note, color, settings)
+   ↓ visual effect spawns
+```
+
+### Preset Change Flow
 ```
 User changes slider in SoundEditor
-  ↓ updatePresetParameter()
+  ↓ store.updatePresetParameter()
 Store updates preset
-  ↓ useEffect in App.tsx
-audioEngine.updateSynthParams() — updates without restart
+  ↓ useEffect in App.tsx watches preset
+audioEngine.updateSynthParams() — updates live
 ```
 
 ---
@@ -226,12 +317,13 @@ audioEngine.updateSynthParams() — updates without restart
 1. **User clicks Play** → `Tone.start()` (required for Web Audio)
 2. **TimeDilator starts** → Begins emitting time events
 3. **Channels created** → `audioEngine.createChannel()` for hour/minute/second
-4. **Events trigger notes**:
-   - `'second'` → plays melodic note
-   - `'minute'` → plays chord, updates transposition
-   - `'hour'` → updates drone chord
-   - **Arpeggiator**: Sequences notes from current trichord on dedicated channel
-5. **User stops** → Channels release, TimeDilator stops
+4. **Arp starts** → `Arpeggiator.start()` begins pattern sequencing
+5. **Events trigger notes**:
+   - `'second'` → plays melodic note + visual trigger
+   - `'minute'` → plays chord + updates transposition + visual
+   - `'hour'` → updates drone chord + visual
+   - **Arp**: sequences notes from current trichord on dedicated channel
+6. **User stops** → Channels release, TimeDilator stops, Arpeggiator stops, Visuals clear
 
 ---
 
@@ -241,40 +333,51 @@ audioEngine.updateSynthParams() — updates without restart
 app/src/
 ├── core/
 │   ├── audio/
-│   │   ├── AudioEngine.ts    # Synthesis engine
-│   │   └── presets.ts        # Sound presets
+│   │   ├── AudioEngine.ts      # Synthesis engine (Tone.js)
+│   │   ├── Arpeggiator.ts      # Pattern sequencer
+│   │   └── presets.ts           # Sound presets library
 │   ├── theory/
-│   │   └── ToneClock.ts      # Music theory
+│   │   └── ToneClock.ts         # Music theory (Peter Schat)
 │   ├── time/
-│   │   └── TimeDilator.ts    # Virtual clock
+│   │   └── TimeDilator.ts       # Virtual clock with speed/reverse
 │   └── visuals/
-│       └── themes.ts         # Visual themes
+│       ├── VisualEngine.ts      # Rendering pipeline manager
+│       ├── themes.ts            # Visual theme definitions
+│       └── renderers/
+│           ├── MultiRenderer.ts     # Effect dispatcher
+│           ├── ParticleRenderer.ts  # Physics-based particles
+│           ├── RippleRenderer.ts    # Expanding circles
+│           ├── DropletRenderer.ts   # Falling droplets
+│           └── WaveRenderer.ts      # Horizontal waves
 ├── components/
 │   ├── clock/
-│   │   └── ClockDisplay.tsx
+│   │   └── ClockDisplay.tsx     # Analog + digital clock
 │   ├── editors/
-│   │   ├── SoundEditor.tsx
-│   │   └── ThemeSelector.tsx
-│   └── mixer/
-│       └── Mixer.tsx
+│   │   ├── SoundEditor.tsx      # Sound parameter editor
+│   │   ├── VisualEditor.tsx     # Visual layer settings
+│   │   └── ThemeSelector.tsx    # Theme + background picker
+│   ├── mixer/
+│   │   └── Mixer.tsx            # Per-channel volume/mute
+│   └── visuals/
+│       └── VisualCanvas.tsx     # Fullscreen canvas element
 ├── hooks/
-│   └── useStore.ts           # Zustand state
-├── App.tsx                   # Main component
-├── main.tsx                  # Entry point
-└── index.css                 # Styles
+│   └── useStore.ts              # Zustand state (persisted)
+├── App.tsx                      # Main component — orchestrator
+├── main.tsx                     # Entry point
+└── index.css                    # Styles
 ```
 
 ---
 
 ## Key Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `tone` | Web Audio synthesis |
-| `react` | UI framework |
-| `zustand` | State management |
-| `vite` | Build tool |
-| `typescript` | Type safety |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `tone` | 15.x | Web Audio synthesis |
+| `react` | 19.x | UI framework |
+| `zustand` | 5.x | State management + persistence |
+| `vite` | 7.x | Build tool + dev server |
+| `typescript` | 5.9.x | Type safety |
 
 ---
 

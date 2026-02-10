@@ -13,7 +13,7 @@ export interface ArpeggiatorSettings {
 }
 
 export const defaultArpSettings: ArpeggiatorSettings = {
-    enabled: false,
+    enabled: true, // Auto-enable by default, use mixer mute to silence
     pattern: 'up',
     rate: '8n',
     glissando: 0,

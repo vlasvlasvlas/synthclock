@@ -1,73 +1,73 @@
-# React + TypeScript + Vite
+# SynthClock — App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web construida con React + TypeScript + Vite.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Node.js** ≥ 18
+- **npm** ≥ 9
 
-## React Compiler
+## Scripts
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Script | Descripción |
+|--------|-------------|
+| `npm run dev` | Inicia servidor de desarrollo con HMR (`http://localhost:5173`) |
+| `npm run build` | Compila TypeScript y genera bundle de producción |
+| `npm run preview` | Sirve el build de producción localmente |
+| `npm run lint` | Ejecuta ESLint sobre el código |
 
-## Expanding the ESLint configuration
+## Dependencias Principales
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+| Paquete | Versión | Uso |
+|---------|---------|-----|
+| `react` | 19.x | Framework UI |
+| `react-dom` | 19.x | Renderizado DOM |
+| `tone` | 15.x | Motor de síntesis de audio (Web Audio API) |
+| `zustand` | 5.x | Estado global con persistencia en localStorage |
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Estructura de Archivos
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+├── core/                        # Lógica de negocio (sin UI)
+│   ├── audio/
+│   │   ├── AudioEngine.ts       # Motor de síntesis (Tone.js)
+│   │   ├── Arpeggiator.ts       # Secuenciador de arpegios
+│   │   └── presets.ts           # Definiciones de presets de sonido
+│   ├── theory/
+│   │   └── ToneClock.ts         # Teoría musical (Tone Clock de Peter Schat)
+│   ├── time/
+│   │   └── TimeDilator.ts       # Reloj virtual con velocidad variable
+│   └── visuals/
+│       ├── VisualEngine.ts      # Motor de renderizado visual
+│       ├── themes.ts            # Definiciones de temas
+│       └── renderers/           # Efectos visuales pluggables
+│           ├── MultiRenderer.ts # Dispatcher de efectos por capa
+│           ├── ParticleRenderer.ts
+│           ├── RippleRenderer.ts
+│           ├── DropletRenderer.ts
+│           └── WaveRenderer.ts
+├── components/                  # Componentes React
+│   ├── clock/
+│   │   └── ClockDisplay.tsx     # Reloj analógico y digital
+│   ├── editors/
+│   │   ├── SoundEditor.tsx      # Editor de sonido por capa
+│   │   ├── VisualEditor.tsx     # Editor de efectos visuales por capa
+│   │   └── ThemeSelector.tsx    # Selector de tema y fondo
+│   ├── mixer/
+│   │   └── Mixer.tsx            # Control de volumen y mute por canal
+│   └── visuals/
+│       └── VisualCanvas.tsx     # Canvas fullscreen para efectos visuales
+├── hooks/
+│   └── useStore.ts              # Estado global (Zustand + persistencia)
+├── App.tsx                      # Componente principal — orquesta audio, tiempo y visuales
+├── main.tsx                     # Punto de entrada
+└── index.css                    # Estilos globales
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Notas de Desarrollo
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- El audio requiere interacción del usuario para iniciar (`Tone.start()`)
+- Los efectos visuales usan `requestAnimationFrame` para renderizado
+- El estado se persiste en `localStorage` (temas, presets, mixer, velocidad)
+- Los singletons exportados (`audioEngine`, `visualEngine`, `timeDilator`, `arpeggiator`) se instancian una sola vez
