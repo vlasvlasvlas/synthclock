@@ -121,24 +121,37 @@ export const VisualEditor = () => {
                                             <span>{source.label}</span>
                                         </div>
                                     ))}
-                                    {/* Color Picker - only show when custom is selected */}
-                                    {currentSettings.colorSource === 'custom' && (
+                                </div>
+                                {/* Color Picker - always visible when Custom is selected */}
+                                {currentSettings.colorSource === 'custom' && (
+                                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontSize: 12 }}>Pick color:</span>
                                         <input
                                             type="color"
                                             value={currentSettings.customColor || '#ffffff'}
                                             onChange={(e) => setVisualLayer(activeLayer, { customColor: e.target.value })}
                                             disabled={!currentSettings.enabled}
                                             style={{
-                                                width: 32,
-                                                height: 24,
-                                                border: '1px solid #999',
+                                                width: 40,
+                                                height: 28,
+                                                border: '2px solid #333',
                                                 borderRadius: 3,
                                                 cursor: 'pointer',
                                                 opacity: currentSettings.enabled ? 1 : 0.5,
+                                                padding: 0,
                                             }}
                                         />
-                                    )}
-                                </div>
+                                        <span style={{
+                                            display: 'inline-block',
+                                            width: 60,
+                                            height: 20,
+                                            backgroundColor: currentSettings.customColor || '#ffffff',
+                                            border: '1px solid #999',
+                                            borderRadius: 3,
+                                        }} />
+                                        <span style={{ fontSize: 11, color: '#666' }}>{currentSettings.customColor}</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Position Mode */}

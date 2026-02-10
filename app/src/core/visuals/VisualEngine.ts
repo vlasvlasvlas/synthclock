@@ -42,7 +42,6 @@ class VisualEngine {
     private renderer: CanvasRenderer | null = null;
     private rafId: number | null = null;
     private isRunning = false;
-    private _lastTime = 0;
     private frameCount = 0;
 
     constructor() {
@@ -114,7 +113,7 @@ class VisualEngine {
 
         this.isRunning = true;
         this.frameCount = 0;
-        this._lastTime = performance.now();
+
         this.animate();
         log('✅ Started render loop');
     }
@@ -151,7 +150,7 @@ class VisualEngine {
             }
         }
 
-        this._lastTime = now;
+
         this.rafId = requestAnimationFrame(this.animate);
     };
 

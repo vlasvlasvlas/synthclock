@@ -229,20 +229,36 @@ function App() {
     audioEngine.setArpPortamento(arpSettings.glissando / 1000);
   }, [arpSettings]);
 
-  // Watch visual layer enable/disable and clear visuals when ALL are off or ANY changes
+  // Watch visual layer enable/disable and clear visuals when disabled or set to 'none'
   const prevVisualSettings = useRef(visualSettings);
   useEffect(() => {
     const prev = prevVisualSettings.current;
     const layers: Array<'hour' | 'minute' | 'second' | 'arp'> = ['hour', 'minute', 'second', 'arp'];
 
-    // Check if any layer was just disabled
+    let shouldClear = false;
     for (const layer of layers) {
+      // Clear if layer was just disabled
       if (prev[layer].enabled && !visualSettings[layer].enabled) {
-        // Layer was just disabled - clear all visual effects for immediate response
-        visualEngine.clearAll();
+        shouldClear = true;
+        break;
+      }
+      // Clear if effect was changed to 'none'
+      if (prev[layer].effect !== 'none' && visualSettings[layer].effect === 'none') {
+        shouldClear = true;
         break;
       }
     }
+
+    if (shouldClear) {
+      visualEngine.clearAll();
+    }
+
+    // Also check: if ALL layers are disabled or none, clear
+    const allOff = layers.every(l => !visualSettings[l].enabled || visualSettings[l].effect === 'none');
+    if (allOff) {
+      visualEngine.clearAll();
+    }
+
     prevVisualSettings.current = visualSettings;
   }, [visualSettings]);
 
