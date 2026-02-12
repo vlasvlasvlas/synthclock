@@ -165,7 +165,7 @@ export const useStore = create<AppState>()(
             // UI
             showEditor: false,
             editorTab: 'sounds',
-            visualsEnabled: true,
+            visualsEnabled: false,
             isFullscreen: false,
 
             // Visual Settings - per-layer configuration
