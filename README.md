@@ -142,3 +142,6 @@ Este proyecto es de código abierto. Siéntete libre de modificarlo y experiment
 - [Tone Clock — Wikipedia](https://en.wikipedia.org/wiki/Tone_clock)
 - [Peter Schat](https://en.wikipedia.org/wiki/Peter_Schat) — Compositor holandés creador de la técnica
 - [Tone.js Documentation](https://tonejs.github.io/)
+## License
+
+MIT License — © 2026 [Vladimiro Bellini](https://github.com/vlasvlasvlas). Free to use and modify, attribution required.
