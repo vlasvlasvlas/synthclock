@@ -1,6 +1,6 @@
 // Main App Component
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import './index.css';
 import { ClockDisplay } from './components/clock/ClockDisplay';
 import { SoundEditor } from './components/editors/SoundEditor';
@@ -19,6 +19,7 @@ function App() {
   const {
     theme,
     currentThemeId,
+    setTheme,
     isPlaying,
     setIsPlaying,
     speed,
@@ -291,55 +292,38 @@ function App() {
     second: secondPreset.id
   });
 
+  // Compare base preset IDs ignoring the CUSTOM_ prefix added on tweaks.
+  // This prevents a full channel recreate (with reverb gap) on the first tweak.
+  const baseId = (id: string) => id.replace(/^CUSTOM_/, '');
+
   // Sync Hour Preset
   useEffect(() => {
     if (!audioStarted) return;
 
-    // Check if ID changed (Swap) or just params (Tweak)
-    // Note: The store adds "CUSTOM_" prefix but base ID remains if just tweaking
-    // We compare exact ID strings. If user selects new preset, ID changes.
-    // If user tweaks, ID stays "CUSTOM_..."
+    const isSwap = baseId(hourPreset.id) !== baseId(prevPresets.current.hour);
+    prevPresets.current.hour = hourPreset.id;
 
-    // Actually, createChannel is safer for swaps, updateSynthParams for tweaks
-    // If only params changed, update withoutglitch
-
-    if (hourPreset.id !== prevPresets.current.hour) {
-      // ID changed - likely a new preset selected
-      audioEngine.createChannel('hour', hourPreset);
-      prevPresets.current.hour = hourPreset.id;
+    if (isSwap) {
+      // Different preset selected — full recreate, then restart drone
+      audioEngine.createChannel('hour', hourPreset).then(() => {
+        if (isPlaying) {
+          stopHourDrone();
+          setTimeout(() => startHourDrone(), 50);
+        }
+      });
     } else {
-      // ID same - likely a parameter tweak
+      // Parameter tweak — update in place, no audio gap
       audioEngine.updateSynthParams('hour', hourPreset);
-    }
-
-    // CRITICAL: Restart drone if playing, as synth update might kill voices
-    if (isPlaying) {
-      // Debounce slightly to avoid rapid re-triggering during sliding
-      // But for instant feedback, we might want to just re-trigger
-      // Actually, if we just re-trigger, it might sound glitchy on sliders. 
-      // Better to check if voices are active? 
-      // Easiest fix: just call startsHourDrone() which handles the chord release/attack
-      // We'll use a small timeout to let the synth settle
-      // stopHourDrone(); // Optional: force stop first
-      // startHourDrone();
-
-      // BETTER APPROACH: Only restart if it's the HOUR channel.
-      // We are inside the hourPreset effect, so yes.
-      // Let's debounce this restart to avoid chaos while dragging sliders
-      const restartDrone = () => {
-        stopHourDrone();
-        setTimeout(() => startHourDrone(), 50);
-      };
-      restartDrone();
     }
   }, [hourPreset, audioStarted]);
 
   // Sync Minute Preset
   useEffect(() => {
     if (!audioStarted) return;
-    if (minutePreset.id !== prevPresets.current.minute) {
+    const isSwap = baseId(minutePreset.id) !== baseId(prevPresets.current.minute);
+    prevPresets.current.minute = minutePreset.id;
+    if (isSwap) {
       audioEngine.createChannel('minute', minutePreset);
-      prevPresets.current.minute = minutePreset.id;
     } else {
       audioEngine.updateSynthParams('minute', minutePreset);
     }
@@ -348,9 +332,10 @@ function App() {
   // Sync Second Preset
   useEffect(() => {
     if (!audioStarted) return;
-    if (secondPreset.id !== prevPresets.current.second) {
+    const isSwap = baseId(secondPreset.id) !== baseId(prevPresets.current.second);
+    prevPresets.current.second = secondPreset.id;
+    if (isSwap) {
       audioEngine.createChannel('second', secondPreset);
-      prevPresets.current.second = secondPreset.id;
     } else {
       audioEngine.updateSynthParams('second', secondPreset);
     }
@@ -359,11 +344,29 @@ function App() {
   // Sync Arp Preset
   useEffect(() => {
     if (!audioStarted) return;
-    // Arp uses a dedicated synth, so we always just update params
-    // It doesn't support full "presets" in the same channel sense yet,
-    // but this ensures the sound editor changes apply to the Arp Synth
     audioEngine.updateArpParams(arpPreset);
   }, [arpPreset, audioStarted]);
+
+  // Sync reverb decay separately (requires async IR regeneration)
+  useEffect(() => {
+    if (!audioStarted) return;
+    audioEngine.setReverbDecay('hour', hourPreset.effects.reverbDecay ?? 2.5);
+  }, [hourPreset.effects.reverbDecay, audioStarted]);
+
+  useEffect(() => {
+    if (!audioStarted) return;
+    audioEngine.setReverbDecay('minute', minutePreset.effects.reverbDecay ?? 2.5);
+  }, [minutePreset.effects.reverbDecay, audioStarted]);
+
+  useEffect(() => {
+    if (!audioStarted) return;
+    audioEngine.setReverbDecay('second', secondPreset.effects.reverbDecay ?? 1.0);
+  }, [secondPreset.effects.reverbDecay, audioStarted]);
+
+  useEffect(() => {
+    if (!audioStarted) return;
+    audioEngine.setArpReverbDecay(arpPreset.effects.reverbDecay ?? 1.5);
+  }, [arpPreset.effects.reverbDecay, audioStarted]);
 
   // Handle play button
   const handlePlay = async () => {
@@ -385,6 +388,14 @@ function App() {
       setIsPlaying(false);
     }
   };
+
+  // Sync theme object from persisted themeId on first mount (fix hydration mismatch)
+  useLayoutEffect(() => {
+    if (theme.id !== currentThemeId) {
+      setTheme(currentThemeId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Apply theme class to body
   useEffect(() => {

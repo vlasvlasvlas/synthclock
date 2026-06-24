@@ -28,8 +28,8 @@ export const SoundEditor = () => {
                 ? secondPreset
                 : arpPreset;
 
-    // Use 'second' presets for arp layer
-    const layerForPresets = activeLayer === 'arp' ? 'second' : activeLayer;
+    // Use 'minute' presets for arp layer (melodic envelopes, not percussive)
+    const layerForPresets = activeLayer === 'arp' ? 'minute' : activeLayer;
     const layerPresets = getPresetsByLayer(layerForPresets);
 
     const handlePresetChange = (direction: 'prev' | 'next') => {
@@ -322,6 +322,22 @@ export const SoundEditor = () => {
                                 })}
                             />
                             <span className="mac-slider-value">{(currentPreset.effects.reverb * 100).toFixed(0)}%</span>
+                        </div>
+
+                        <div className="mac-slider">
+                            <span className="mac-slider-label">Rev Decay</span>
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="10"
+                                step="0.1"
+                                value={currentPreset.effects.reverbDecay ?? 2.5}
+                                onChange={(e) => updatePresetParameter(activeLayer, 'effects', {
+                                    ...currentPreset.effects,
+                                    reverbDecay: parseFloat(e.target.value)
+                                })}
+                            />
+                            <span className="mac-slider-value">{(currentPreset.effects.reverbDecay ?? 2.5).toFixed(1)}s</span>
                         </div>
 
                         <div className="mac-slider">

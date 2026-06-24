@@ -119,7 +119,7 @@ export interface AppState {
 const defaultHourPreset = getPresetsByLayer('hour')[0];
 const defaultMinutePreset = getPresetsByLayer('minute')[0];
 const defaultSecondPreset = getPresetsByLayer('second')[0];
-const defaultArpPreset = getPresetsByLayer('second')[0]; // Use second presets for arp
+const defaultArpPreset = getPresetsByLayer('minute')[0]; // Use minute presets for arp (melodic)
 
 export const useStore = create<AppState>()(
     persist(
@@ -149,7 +149,7 @@ export const useStore = create<AppState>()(
                 hour: { volume: defaultHourPreset.volume, muted: false },
                 minute: { volume: defaultMinutePreset.volume, muted: false },
                 second: { volume: defaultSecondPreset.volume, muted: false },
-                arp: { volume: -10, muted: false },
+                arp: { volume: -4, muted: false },
             },
 
             // Arpeggiator
@@ -385,7 +385,7 @@ export const useStore = create<AppState>()(
         }),
         {
             name: 'synthclock-storage',
-            version: 3,
+            version: 5,
             migrate: (persistedState: any, version: number) => {
                 if (version === 0) {
                     // Migration from version 0 to 1
@@ -404,7 +404,6 @@ export const useStore = create<AppState>()(
                 }
                 if (version < 3) {
                     // Migration to version 3: Reset visual settings with better defaults
-                    // Previous defaults were too subtle (low intensity/size/opacity)
                     persistedState.visualSettings = {
                         hour: {
                             enabled: true, effect: 'ripples', colorSource: 'theme',
@@ -427,6 +426,18 @@ export const useStore = create<AppState>()(
                             positionMode: 'random', sizeMultiplier: 0.8, opacity: 0.7,
                         },
                     };
+                }
+                if (version < 4) {
+                    // Version 4: visuals enabled (now reverted)
+                    persistedState.visualsEnabled = true;
+                }
+                if (version < 5) {
+                    // Version 5: visuals off by default, arp uses minute presets, arp volume up
+                    persistedState.visualsEnabled = false;
+                    persistedState.arpPreset = getPresetsByLayer('minute')[0];
+                    if (persistedState.mixer?.arp) {
+                        persistedState.mixer.arp.volume = -4;
+                    }
                 }
                 return persistedState as AppState;
             },

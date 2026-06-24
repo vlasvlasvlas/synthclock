@@ -15,15 +15,17 @@ SynthClock traduce el paso del tiempo en música y efectos visuales reactivos. C
 - **Cadena de efectos completa** por canal: Filter → Tremolo → Delay → Reverb → Gate → Volume
 - **Formas de onda**: Sine, Square, Sawtooth, Triangle
 - **Filtros**: Lowpass, Highpass, Bandpass, Notch con resonancia ajustable
-- **Efectos**: Reverb, Delay (con Feedback), Chorus, Distortion, Tremolo, Noise Gate
+- **Efectos**: Reverb (con control de Wet y Decay independientes), Delay (con Feedback), Chorus, Distortion, Tremolo, Noise Gate
 - **Presets de sonido** editables por capa con ADSR completo
+- Actualización de parámetros en tiempo real sin cortes de audio
 
 ### 🎶 Arpegiador
 
 - **Patrones**: Up, Down, UpDown, DownUp, Random
 - **Rates**: 1/1 (whole), 1/2 (half), 1/4, 1/8, 1/16
-- **Glissando**: Efecto portamento entre notas (0–500ms)
+- **Glissando**: Efecto portamento entre notas (0–2000ms)
 - **Cadena FX dedicada**: MonoSynth → Filter → Delay → Reverb → Volume
+- Presets de sonido melódicos (plucks, bells, leads)
 - Sincronizado automáticamente al trichord actual del Tone Clock
 
 ### 🎨 Sistema Visual
@@ -43,6 +45,7 @@ SynthClock traduce el paso del tiempo en música y efectos visuales reactivos. C
 ### 🎛️ Mixer
 
 - Control de **volumen y mute** independiente para cada canal
+- Rango de volumen **−60 dB a +12 dB** por canal
 - Persistencia de estado entre sesiones (via localStorage)
 
 ### 🎭 Temas Visuales
@@ -53,12 +56,21 @@ SynthClock traduce el paso del tiempo en música y efectos visuales reactivos. C
 - **Terminal Green** — Terminal verde phosphor
 - **Windows 3.1** — Estilo Windows clásico
 
+### 🕰️ Panel del Tone Clock
+
+El panel debajo del reloj muestra en todo momento:
+- **Nombre del trichord activo** según la hora actual (ej. "Hour 9 — Quartal")
+- **Descripción musical** del carácter sonoro
+- **Las 3 notas que suenan** en secuencia, con la nota activa resaltada en tiempo real
+- Indicación de cómo y cuándo cambia el grupo de notas
+
 ### 🎼 Teoría Musical
 
 Basado en el **Tone Clock** de Peter Schat:
-- Las manecillas del reloj mapean a trichords (conjuntos de 3 notas)
-- 12 horas = 12 tipos únicos de trichord
-- Teselación completa del espacio cromático
+- **Hora** → selecciona el tipo de trichord (12 tipos únicos)
+- **Minutos** → cambia la transposición del trichord cada 15 minutos
+- **Segundos** → cicla entre las 3 notas del trichord actual (una por segundo)
+- Teselación completa del espacio cromático de 12 notas
 - [Más info sobre Tone Clock →](https://en.wikipedia.org/wiki/Tone_clock)
 
 ## 🚀 Quick Start

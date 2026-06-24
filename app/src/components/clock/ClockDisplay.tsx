@@ -50,6 +50,7 @@ export const ClockDisplay = ({ size = 300 }: ClockDisplayProps) => {
 
     // Get Tone Clock state for current time
     const toneClockState = mapTimeToToneClock(time.hours, time.minutes, time.seconds);
+    const noteIndex = time.seconds % 3;
 
     // Convert radians to degrees for CSS rotation
     const radToDeg = (rad: number) => (rad * 180 / Math.PI) + 90;
@@ -164,7 +165,7 @@ export const ClockDisplay = ({ size = 300 }: ClockDisplayProps) => {
             </div>
 
             {/* Tone Clock Info */}
-            <ToneClockInfo hour={toneClockState.activeHour} trichord={toneClockState.currentTrichord} />
+            <ToneClockInfo hour={toneClockState.activeHour} trichord={toneClockState.currentTrichord} noteIndex={noteIndex} />
         </div>
     );
 };
@@ -173,50 +174,77 @@ export const ClockDisplay = ({ size = 300 }: ClockDisplayProps) => {
 interface ToneClockInfoProps {
     hour: ToneClockHour;
     trichord: number[];
+    noteIndex: number;
 }
 
-const ToneClockInfo = ({ hour, trichord }: ToneClockInfoProps) => {
+const ToneClockInfo = ({ hour, trichord, noteIndex }: ToneClockInfoProps) => {
     const { theme } = useStore();
 
     return (
         <div className="tone-clock-info" style={{ marginTop: 16, maxWidth: 300 }}>
             <div className="tone-clock-hour">
-                Hour {hour.hour}: {hour.name}
+                Hour {hour.hour} — {hour.name}
             </div>
-            <div className="tone-clock-trichord">
-                Forte: {hour.forteNumber} | IPF: [{hour.ipf.join(', ')}]
-            </div>
-            <div className="tone-clock-trichord">
-                Current Trichord: {trichord.map(pc => PITCH_CLASSES[pc]).join(' - ')}
-            </div>
-            <div className="tone-clock-description">
+            <div className="tone-clock-description" style={{ marginTop: 2 }}>
                 {hour.description}
             </div>
+
+            <div style={{
+                borderTop: `1px solid ${theme.colors.border}`,
+                marginTop: 8,
+                paddingTop: 8,
+                fontSize: 11,
+                color: theme.colors.foreground,
+                opacity: 0.6,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+            }}>
+                Cycling note
+            </div>
+
             <div style={{
                 display: 'flex',
-                gap: 4,
-                marginTop: 8,
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 6,
                 justifyContent: 'center'
             }}>
                 {trichord.map((pc, i) => (
-                    <div
-                        key={i}
-                        style={{
-                            width: 40,
-                            height: 40,
-                            border: `2px solid ${theme.colors.border}`,
-                            borderRadius: 4,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 'bold',
-                            background: i === 0 ? theme.colors.foreground : 'transparent',
-                            color: i === 0 ? theme.colors.background : theme.colors.foreground,
-                        }}
-                    >
-                        {PITCH_CLASSES[pc]}
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div
+                            style={{
+                                width: 44,
+                                height: 44,
+                                border: `2px solid ${theme.colors.border}`,
+                                borderRadius: 4,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 'bold',
+                                fontSize: 16,
+                                background: i === noteIndex ? theme.colors.foreground : 'transparent',
+                                color: i === noteIndex ? theme.colors.background : theme.colors.foreground,
+                                transition: 'background 0.15s, color 0.15s',
+                                boxShadow: i === noteIndex ? `0 0 0 2px ${theme.colors.foreground}` : 'none',
+                            }}
+                        >
+                            {PITCH_CLASSES[pc]}
+                        </div>
+                        {i < trichord.length - 1 && (
+                            <span style={{ opacity: 0.4, fontSize: 12 }}>→</span>
+                        )}
                     </div>
                 ))}
+            </div>
+
+            <div style={{
+                fontSize: 11,
+                opacity: 0.5,
+                textAlign: 'center',
+                marginTop: 6,
+                fontStyle: 'italic',
+            }}>
+                group changes every 15 min · note cycles each second
             </div>
         </div>
     );

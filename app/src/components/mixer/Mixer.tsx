@@ -102,7 +102,7 @@ export const Mixer = ({ activeLayer }: MixerProps) => {
                         <input
                             type="range"
                             min="-60"
-                            max="6"
+                            max="12"
                             step="1"
                             value={channelState.volume}
                             onChange={(e) => setChannelVolume(ch.id, parseFloat(e.target.value))}

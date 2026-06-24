@@ -175,7 +175,7 @@ class AudioEngine {
 
             // Reverb - use generate() for proper initialization
             const reverb = new Tone.Reverb({
-                decay: Math.max(0.1, Math.min(10, preset.effects?.reverb ? 4 : 0.1)),
+                decay: Math.max(0.1, Math.min(10, preset.effects?.reverbDecay ?? 2.5)),
                 wet: Math.max(0, Math.min(1, preset.effects?.reverb || 0)),
             });
 
@@ -558,6 +558,31 @@ class AudioEngine {
             this.log('Updated Arp synth params + FX');
         } catch (error) {
             this.logError('Failed to update Arp params', error);
+        }
+    }
+
+    // Update reverb decay for a channel (async - must regenerate IR)
+    async setReverbDecay(channelId: string, decay: number): Promise<void> {
+        const channel = this.channels.get(channelId);
+        if (!channel) return;
+        try {
+            channel.reverb.decay = Math.max(0.1, Math.min(10, decay));
+            await channel.reverb.generate();
+            this.log(`Reverb decay updated for ${channelId}: ${decay}s`);
+        } catch (error) {
+            this.logError(`Failed to update reverb decay for ${channelId}`, error);
+        }
+    }
+
+    // Update arp reverb decay
+    async setArpReverbDecay(decay: number): Promise<void> {
+        if (!this.arpReverb) return;
+        try {
+            this.arpReverb.decay = Math.max(0.1, Math.min(10, decay));
+            await this.arpReverb.generate();
+            this.log(`Arp reverb decay updated: ${decay}s`);
+        } catch (error) {
+            this.logError('Failed to update arp reverb decay', error);
         }
     }
 
