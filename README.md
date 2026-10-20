@@ -156,4 +156,4 @@ Este proyecto es de código abierto. Siéntete libre de modificarlo y experiment
 - [Tone.js Documentation](https://tonejs.github.io/)
 ## License
 
-MIT License — © 2026 [Vladimiro Bellini](https://github.com/vlasvlasvlas). Free to use and modify, attribution required.
+[CC BY-SA 4.0](LICENSE) — © Vladimiro Bellini ([vlasvlasvlas](https://github.com/vlasvlasvlas)). Ver [LICENSE](LICENSE) para los términos completos.
